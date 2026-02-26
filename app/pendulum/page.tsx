@@ -64,6 +64,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
   const doneRef = useRef(false);
   const particlesRef = useRef<Particle[]>([]);
   const shakeRef = useRef({ amount: 0 });
+  const lastTimeRef = useRef(0);
 
   const DAMPING = 0.9988;
   const G_ACCEL = 0.0012;
@@ -85,14 +86,16 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
 
   const initConveyor = useCallback((w: number, prizes: Prize[]) => {
     const items: ConveyorItem[] = [];
-    const count = 18 + Math.floor(Math.random() * 5);
+    const giftSize = Math.max(26, Math.min(36, w * 0.085));
+    const giftGap = giftSize * 0.5;
+    const count = Math.max(5, Math.floor((w + 100) / (giftSize + giftGap)));
     const spacing = (w + 100) / count;
     for (let i = 0; i < count; i++) {
       items.push({
         x: -40 + i * spacing,
         prize: selectRandomPrize(prizes),
         speed: 0.5 + Math.random() * 0.3,
-        size: 34,
+        size: giftSize,
         hue: GIFT_HUES[Math.floor(Math.random() * GIFT_HUES.length)],
         bobPhase: Math.random() * Math.PI * 2,
         grabbed: false,
@@ -135,20 +138,25 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
     shakeRef.current.amount = 0;
     initConveyor(w, prizes);
     timeRef.current = 0;
+    lastTimeRef.current = 0;
 
     const loop = () => {
       if (doneRef.current) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      timeRef.current++;
+      const now = performance.now();
+      const rawDt = lastTimeRef.current ? (now - lastTimeRef.current) / 16.667 : 1;
+      const dt = Math.min(rawDt, 3);
+      lastTimeRef.current = now;
+      timeRef.current += dt;
 
       // Screen shake
       let sx = 0, sy = 0;
       if (shakeRef.current.amount > 0) {
         sx = (Math.random() - 0.5) * shakeRef.current.amount;
         sy = (Math.random() - 0.5) * shakeRef.current.amount;
-        shakeRef.current.amount *= 0.88;
+        shakeRef.current.amount *= Math.pow(0.88, dt);
         if (shakeRef.current.amount < 0.3) shakeRef.current.amount = 0;
       }
       ctx.translate(sx, sy);
@@ -174,17 +182,17 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       /* ── PENDULUM PHYSICS ── swing only when NOT dropping/retracting ── */
       if (!pend.dropping && !pend.retracting) {
         const angAccel = -G_ACCEL * Math.sin(pend.angle);
-        pend.angVel += angAccel;
-        pend.angVel *= DAMPING;
-        pend.angle += pend.angVel;
+        pend.angVel += angAccel * dt;
+        pend.angVel *= Math.pow(DAMPING, dt);
+        pend.angle += pend.angVel * dt;
       }
       // When dropping/retracting, use the frozen angle (hook goes straight down)
       const activeAngle = (pend.dropping || pend.retracting) ? pend.frozenAngle : pend.angle;
 
       /* ── HOOK EXTENSION ── */
       if (pend.dropping && !pend.retracting) {
-        pend.extSpeed += 0.18;
-        pend.extension += pend.extSpeed;
+        pend.extSpeed += 0.18 * dt;
+        pend.extension += pend.extSpeed * dt;
         pend.clawTarget = 0.35; // partially close while descending
         // Dynamic limit: compute max extension so hook Y reaches conveyor level at the frozen angle
         // hookY = pivotY + cos(angle) * (ropeRestLen + extension) = targetDropY
@@ -241,8 +249,8 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
           setTimeout(() => { pend.retracting = true; pend.extSpeed = 0; }, 350);
         }
       } else if (pend.retracting) {
-        pend.extSpeed += 0.1;
-        pend.extension -= pend.extSpeed;
+        pend.extSpeed += 0.1 * dt;
+        pend.extension -= pend.extSpeed * dt;
         if (pend.extension <= 0) {
           pend.extension = 0;
           if (caughtRef.current) {
@@ -267,7 +275,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       }
 
       // Animate claw open/close smoothly
-      pend.clawOpen += (pend.clawTarget - pend.clawOpen) * 0.12;
+      pend.clawOpen += (pend.clawTarget - pend.clawOpen) * 0.12 * dt;
 
       /* ── POSITIONS ── */
       const totalLen = ropeRestLen + pend.extension;
@@ -523,7 +531,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       /* ── CONVEYOR ITEMS ── */
       for (const item of conveyorRef.current) {
         if (item.grabbed) continue; // skip grabbed items
-        item.x += item.speed;
+        item.x += item.speed * dt;
         if (item.x > w + 80) {
           item.x = -80; // wrap around naturally
         }
@@ -587,10 +595,10 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       /* ── PARTICLES ── */
       for (let i = particlesRef.current.length - 1; i >= 0; i--) {
         const p = particlesRef.current[i];
-        p.life++;
+        p.life += dt;
         if (p.life > p.maxLife) { particlesRef.current.splice(i, 1); continue; }
-        p.vy += 0.04;
-        p.x += p.vx; p.y += p.vy; p.vx *= 0.98;
+        p.vy += 0.04 * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= Math.pow(0.98, dt);
         const alpha = 1 - p.life / p.maxLife;
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;

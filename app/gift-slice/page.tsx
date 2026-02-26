@@ -60,6 +60,7 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
   const pointerRef = useRef({ x: 0, y: 0, down: false, prevX: 0, prevY: 0 });
   const shakeRef = useRef({ x: 0, y: 0, decay: 0 });
   const timeRef = useRef(0);
+  const lastTimeRef = useRef(0);
   const spawnTimerRef = useRef(0);
   const doneRef = useRef(false);
   const itemCountRef = useRef(0);
@@ -126,12 +127,17 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
     itemCountRef.current = 0;
     nextIdRef.current = 0;
     timeRef.current = 0;
+    lastTimeRef.current = 0;
 
     const loop = () => {
       if (doneRef.current) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      timeRef.current++;
+      const now = performance.now();
+      const rawDt = lastTimeRef.current ? (now - lastTimeRef.current) / 16.667 : 1;
+      const dt = Math.min(rawDt, 3);
+      lastTimeRef.current = now;
+      timeRef.current += dt;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Screen shake
@@ -139,7 +145,7 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
       if (shake.decay > 0) {
         shake.x = (Math.random() - 0.5) * shake.decay * 10;
         shake.y = (Math.random() - 0.5) * shake.decay * 10;
-        shake.decay *= 0.88;
+        shake.decay *= Math.pow(0.88, dt);
         if (shake.decay < 0.01) shake.decay = 0;
       } else { shake.x = 0; shake.y = 0; }
       ctx.translate(shake.x, shake.y);
@@ -169,7 +175,7 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
       ctx.fillText('Attention aux fruits — si vous tranchez, c\'est perdu !', w / 2, 48);
 
       // Spawn logic — chain items rapidly
-      spawnTimerRef.current--;
+      spawnTimerRef.current -= dt;
       if (spawnTimerRef.current <= 0) {
         spawnItem(w, h, prizes);
         spawnTimerRef.current = 45 + Math.floor(Math.random() * 20); // new item every ~45-65 frames
@@ -181,9 +187,9 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
         const item = items[idx];
 
         if (!item.sliced) {
-          item.vy += GRAVITY;
-          item.y += item.vy;
-          item.rotation += item.rotSpeed;
+          item.vy += GRAVITY * dt;
+          item.y += item.vy * dt;
+          item.rotation += item.rotSpeed * dt;
 
           // Remove if fell off screen
           if (item.y > h + 120 && item.vy > 0) {
@@ -305,10 +311,10 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
           const age = Date.now() - item.sliceTime;
           if (age > 1500) { items.splice(idx, 1); continue; }
           for (const half of item.halves) {
-            half.vy += 0.15;
-            half.x += half.vx;
-            half.y += half.vy;
-            half.rot += half.rotV;
+            half.vy += 0.15 * dt;
+            half.x += half.vx * dt;
+            half.y += half.vy * dt;
+            half.rot += half.rotV * dt;
             ctx.save();
             ctx.translate(half.x, half.y);
             ctx.rotate(half.rot);
@@ -330,9 +336,9 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
       // Particles
       for (let i = particlesRef.current.length - 1; i >= 0; i--) {
         const pt = particlesRef.current[i];
-        pt.life++;
+        pt.life += dt;
         if (pt.life > pt.maxLife) { particlesRef.current.splice(i, 1); continue; }
-        pt.vy += 0.06; pt.x += pt.vx; pt.y += pt.vy; pt.vx *= 0.98;
+        pt.vy += 0.06 * dt; pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.vx *= Math.pow(0.98, dt);
         const alpha = 1 - pt.life / pt.maxLife;
         ctx.globalAlpha = alpha;
         ctx.fillStyle = pt.color;
@@ -342,7 +348,7 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
 
       // Slice trail
       const trail = sliceTrailRef.current;
-      for (let i = trail.length - 1; i >= 0; i--) { trail[i].age++; if (trail[i].age > 12) trail.splice(i, 1); }
+      for (let i = trail.length - 1; i >= 0; i--) { trail[i].age += dt; if (trail[i].age > 12) trail.splice(i, 1); }
       if (trail.length > 1) {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';

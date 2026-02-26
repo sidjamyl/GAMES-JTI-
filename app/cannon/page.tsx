@@ -56,6 +56,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   const debrisRef = useRef<Debris[]>([]);
   const shakeRef = useRef({ amount: 0 });
   const timeRef = useRef(0);
+  const lastTimeRef = useRef(0);
   const touchRef = useRef<{ active: boolean; startX: number; startY: number; startAngle: number; startPower: number }>({
     active: false, startX: 0, startY: 0, startAngle: 0, startPower: 0,
   });
@@ -114,6 +115,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     debrisRef.current = [];
     hitRef.current = false;
     timeRef.current = 0;
+    lastTimeRef.current = 0;
 
     const cannonBaseX = 48;
     const cannonBaseY = h - 55;
@@ -122,14 +124,18 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      timeRef.current++;
+      const now = performance.now();
+      const rawDt = lastTimeRef.current ? (now - lastTimeRef.current) / 16.667 : 1;
+      const dt = Math.min(rawDt, 3);
+      lastTimeRef.current = now;
+      timeRef.current += dt;
 
       // Shake
       let sx = 0, sy = 0;
       if (shakeRef.current.amount > 0) {
         sx = (Math.random() - 0.5) * shakeRef.current.amount;
         sy = (Math.random() - 0.5) * shakeRef.current.amount;
-        shakeRef.current.amount *= 0.88;
+        shakeRef.current.amount *= Math.pow(0.88, dt);
         if (shakeRef.current.amount < 0.3) shakeRef.current.amount = 0;
       }
       ctx.translate(sx, sy);
@@ -345,11 +351,11 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       // Ball
       const ball = ballRef.current;
       if (ball) {
-        ball.vx += windRef.current;
-        ball.vy += GRAVITY;
-        ball.x += ball.vx; ball.y += ball.vy;
+        ball.vx += windRef.current * dt;
+        ball.vy += GRAVITY * dt;
+        ball.x += ball.vx * dt; ball.y += ball.vy * dt;
 
-        if (timeRef.current % 2 === 0) {
+        if (Math.floor(timeRef.current) % 2 === 0 && Math.floor(timeRef.current) !== Math.floor(timeRef.current - dt)) {
           particlesRef.current.push({
             x: ball.x, y: ball.y, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5,
             life: 0, maxLife: 15, size: BALL_R * 0.6, color: GOLD + '40', type: 'trail',
@@ -419,11 +425,11 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       // Particles
       for (let i = particlesRef.current.length - 1; i >= 0; i--) {
         const p = particlesRef.current[i];
-        p.life++;
+        p.life += dt;
         if (p.life > p.maxLife) { particlesRef.current.splice(i, 1); continue; }
-        if (p.type === 'smoke') p.vy -= 0.02;
-        else if (p.type === 'spark') p.vy += 0.08;
-        p.x += p.vx; p.y += p.vy;
+        if (p.type === 'smoke') p.vy -= 0.02 * dt;
+        else if (p.type === 'spark') p.vy += 0.08 * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt;
         const alpha = 1 - p.life / p.maxLife;
         ctx.globalAlpha = alpha;
         if (p.type === 'smoke') {
@@ -439,12 +445,12 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       // Debris fragments (broken gift pieces)
       for (let i = debrisRef.current.length - 1; i >= 0; i--) {
         const d = debrisRef.current[i];
-        d.life++;
+        d.life += dt;
         if (d.life > d.maxLife) { debrisRef.current.splice(i, 1); continue; }
-        d.vy += 0.12; // gravity
-        d.x += d.vx; d.y += d.vy;
-        d.vx *= 0.99;
-        d.rot += d.rotV;
+        d.vy += 0.12 * dt; // gravity
+        d.x += d.vx * dt; d.y += d.vy * dt;
+        d.vx *= Math.pow(0.99, dt);
+        d.rot += d.rotV * dt;
         const alpha = 1 - d.life / d.maxLife;
         ctx.save();
         ctx.globalAlpha = alpha;

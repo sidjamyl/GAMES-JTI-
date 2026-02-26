@@ -54,6 +54,7 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
   const shakeRef = useRef({ amount: 0, decay: 0 });
   const perfectStreakRef = useRef(0);
   const timeRef = useRef(0);
+  const lastTimeRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { fetchPrizes().then((p) => { setPrizes(p); setPhase('ready'); }); }, []);
@@ -109,20 +110,25 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
     particlesRef.current = [];
     perfectStreakRef.current = 0;
     timeRef.current = 0;
+    lastTimeRef.current = 0;
 
     const loop = () => {
       if (gameOverRef.current) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      timeRef.current++;
+      const now = performance.now();
+      const rawDt = lastTimeRef.current ? (now - lastTimeRef.current) / 16.667 : 1;
+      const dt = Math.min(rawDt, 3);
+      lastTimeRef.current = now;
+      timeRef.current += dt;
 
       // Screen shake
       let sx = 0, sy = 0;
       if (shakeRef.current.amount > 0) {
         sx = (Math.random() - 0.5) * shakeRef.current.amount;
         sy = (Math.random() - 0.5) * shakeRef.current.amount;
-        shakeRef.current.amount *= 0.88;
+        shakeRef.current.amount *= Math.pow(0.88, dt);
         if (shakeRef.current.amount < 0.2) shakeRef.current.amount = 0;
       }
       ctx.translate(sx, sy);
@@ -154,7 +160,7 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
 
       // Camera scroll
       const targetOffset = Math.max(0, (blocks.length - 8) * BLOCK_H);
-      offsetRef.current += (targetOffset - offsetRef.current) * 0.06;
+      offsetRef.current += (targetOffset - offsetRef.current) * 0.06 * dt;
       ctx.save();
       ctx.translate(0, offsetRef.current);
 
@@ -167,7 +173,7 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
       // Current moving block
       const cur = currentRef.current;
       if (cur && !cur.placed) {
-        cur.x += speedRef.current * dirRef.current;
+        cur.x += speedRef.current * dirRef.current * dt;
         if (cur.x + cur.width > w) dirRef.current = -1;
         if (cur.x < 0) dirRef.current = 1;
         drawBlock3D(ctx, cur.x, cur.y, cur.width, BLOCK_H, cur.hue, false);
@@ -182,9 +188,9 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
       // Falling cut pieces (rotate as they fall)
       for (let i = fallingRef.current.length - 1; i >= 0; i--) {
         const p = fallingRef.current[i];
-        p.vy += 0.35;
-        p.y += p.vy;
-        p.rot += p.rotV;
+        p.vy += 0.35 * dt;
+        p.y += p.vy * dt;
+        p.rot += p.rotV * dt;
         if (p.y > h + offsetRef.current + 100) { fallingRef.current.splice(i, 1); continue; }
         ctx.save();
         ctx.translate(p.x + p.w / 2, p.y + BLOCK_H / 2);
@@ -198,9 +204,9 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
       // Particles
       for (let i = particlesRef.current.length - 1; i >= 0; i--) {
         const p = particlesRef.current[i];
-        p.life++;
+        p.life += dt;
         if (p.life > p.maxLife) { particlesRef.current.splice(i, 1); continue; }
-        p.vy += 0.05; p.x += p.vx; p.y += p.vy; p.vx *= 0.98;
+        p.vy += 0.05 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= Math.pow(0.98, dt);
         const alpha = 1 - p.life / p.maxLife;
         ctx.globalAlpha = alpha;
         ctx.fillStyle = p.color;
