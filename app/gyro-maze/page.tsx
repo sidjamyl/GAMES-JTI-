@@ -7,56 +7,58 @@ import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 
 /* ═══════════════════════════════════════════════
-   GYRO MAZE — Tilt-controlled labyrinth
-   Roll the ball through the maze to the gift.
-   Uses DeviceOrientation (gyroscope) on mobile,
-   mouse/touch drag on desktop as fallback.
-   Always rigged: player always reaches the goal.
+   GYRO MAZE — Ball starts at center,
+   4 gift exits on each side.
+   Tilt (gyro) or touch to guide the ball.
+   Always rigged: player always reaches a goal.
    ═══════════════════════════════════════════════ */
 
 const ACCENT_FROM = '#10b981';
 const ACCENT_TO = '#06b6d4';
 
-const BALL_RADIUS = 10;
-const TRAP_RADIUS = 9;
-const GOAL_RADIUS = 16;
-const WALL_THICKNESS = 4;
-const FRICTION = 0.92;
-const GRAVITY_SCALE = 0.45;
-const MAX_SPEED = 6;
+const BALL_RADIUS = 9;
+const GOAL_RADIUS = 14;
+const WALL_THICKNESS = 3;
+const TRAP_RADIUS = 8;
+const FRICTION = 0.94;
+const ACCEL = 0.55;
+const MAX_SPEED = 4.5;
 
-// Maze definition: walls as [x1, y1, x2, y2] in 0-1 normalized coords
-// A compact maze that's solvable but has traps
+const BALL_START: [number, number] = [0.5, 0.5];
+
+const GOAL_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
+const GOAL_EMOJIS = ['🎁', '🎁', '🎁', '🎁'];
+
+// 4 goals just inside each exit gap
+const GOALS: [number, number][] = [
+  [0.5, 0.025],   // Top (North)
+  [0.975, 0.5],   // Right (East)
+  [0.5, 0.975],   // Bottom (South)
+  [0.025, 0.5],   // Left (West)
+];
+
 const MAZE_WALLS: [number, number, number, number][] = [
-  // Outer walls
-  [0, 0, 1, 0], [1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 0, 0],
-  // Inner maze structure
-  [0.25, 0, 0.25, 0.35],
-  [0.25, 0.35, 0.55, 0.35],
-  [0.5, 0, 0.5, 0.2],
-  [0.75, 0.15, 0.75, 0.5],
-  [0.55, 0.5, 1, 0.5],
-  [0, 0.55, 0.35, 0.55],
-  [0.35, 0.55, 0.35, 0.75],
-  [0.55, 0.65, 0.55, 0.85],
-  [0.55, 0.85, 0.85, 0.85],
-  [0.15, 0.75, 0.55, 0.75],
-  [0.75, 0.5, 0.75, 0.72],
-  [0, 0.35, 0.12, 0.35],
+  // ── Outer walls with exit gaps (gap: 0.38 → 0.62) ──
+  [0, 0, 0.37, 0], [0.63, 0, 1, 0],
+  [1, 0, 1, 0.37], [1, 0.63, 1, 1],
+  [1, 1, 0.63, 1], [0.37, 1, 0, 1],
+  [0, 1, 0, 0.63], [0, 0.37, 0, 0],
+  // ── Quadrant L-barriers ──
+  [0.22, 0.08, 0.22, 0.35], [0.08, 0.22, 0.35, 0.22],
+  [0.78, 0.08, 0.78, 0.35], [0.65, 0.22, 0.92, 0.22],
+  [0.22, 0.65, 0.22, 0.92], [0.08, 0.78, 0.35, 0.78],
+  [0.78, 0.65, 0.78, 0.92], [0.65, 0.78, 0.92, 0.78],
+  // ── Inner cross barriers (gaps at cardinal directions) ──
+  [0.42, 0.3, 0.42, 0.42], [0.58, 0.3, 0.58, 0.42],
+  [0.42, 0.58, 0.42, 0.7], [0.58, 0.58, 0.58, 0.7],
+  [0.3, 0.42, 0.42, 0.42], [0.58, 0.42, 0.7, 0.42],
+  [0.3, 0.58, 0.42, 0.58], [0.58, 0.58, 0.7, 0.58],
 ];
 
-// Trap holes (cause a small penalty / teleport back)
+// Traps in the 4 corners — dangerous dead-end zones
 const TRAP_POSITIONS: [number, number][] = [
-  [0.38, 0.18],
-  [0.62, 0.42],
-  [0.18, 0.68],
-  [0.82, 0.68],
-  [0.45, 0.62],
+  [0.11, 0.11], [0.89, 0.11], [0.11, 0.89], [0.89, 0.89],
 ];
-
-// Ball start and goal
-const BALL_START: [number, number] = [0.12, 0.12];
-const GOAL_POS: [number, number] = [0.88, 0.92];
 
 interface BallState {
   x: number; y: number;
@@ -67,14 +69,14 @@ export default function GyroMaze() {
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
-  const [hasGyro, setHasGyro] = useState<boolean | null>(null);
-  const [gyroPermission, setGyroPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [trapHits, setTrapHits] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [hasGyro, setHasGyro] = useState<boolean | null>(null);
+  const [gyroPermission, setGyroPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ballRef = useRef<BallState>({ x: 0, y: 0, vx: 0, vy: 0 });
-  const tiltRef = useRef({ x: 0, y: 0 }); // normalized -1..1
+  const tiltRef = useRef({ x: 0, y: 0 });
   const animRef = useRef(0);
   const phaseRef = useRef<GamePhase>('loading');
   const dprRef = useRef(1);
@@ -82,23 +84,19 @@ export default function GyroMaze() {
   const startTimeRef = useRef(0);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const trappedRef = useRef(false);
-  const dragRef = useRef<{ active: boolean; lastX: number; lastY: number }>({ active: false, lastX: 0, lastY: 0 });
   const trapCooldownRef = useRef(0);
+  const touchActiveRef = useRef(false);
+  const touchPosRef = useRef({ x: 0, y: 0 });
+  const calibrationRef = useRef({ beta: 0, gamma: 0, calibrated: false });
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
-  // Load prizes
   useEffect(() => {
-    fetchPrizes().then((p) => {
-      setPrizes(p);
-      setPhase('ready');
-    });
+    fetchPrizes().then((p) => { setPrizes(p); setPhase('ready'); });
   }, []);
 
-  // Detect gyroscope
   useEffect(() => {
-    const hasOrientation = 'DeviceOrientationEvent' in window;
-    setHasGyro(hasOrientation);
+    setHasGyro('DeviceOrientationEvent' in window);
   }, []);
 
   const requestGyroPermission = useCallback(async () => {
@@ -108,10 +106,7 @@ export default function GyroMaze() {
         const perm = await DOE.requestPermission();
         setGyroPermission(perm === 'granted' ? 'granted' : 'denied');
         return perm === 'granted';
-      } catch {
-        setGyroPermission('denied');
-        return false;
-      }
+      } catch { setGyroPermission('denied'); return false; }
     }
     setGyroPermission('granted');
     return true;
@@ -124,14 +119,11 @@ export default function GyroMaze() {
     dprRef.current = dpr;
     const w = c.offsetWidth * dpr;
     const h = c.offsetHeight * dpr;
-    c.width = w;
-    c.height = h;
-
-    // Maze is a square centered on canvas
-    const padding = 30 * dpr;
-    const mazeSize = Math.min(w - padding * 2, h * 0.65);
+    c.width = w; c.height = h;
+    const padding = 24 * dpr;
+    const mazeSize = Math.min(w - padding * 2, h * 0.62);
     const mazeX = (w - mazeSize) / 2;
-    const mazeY = h * 0.18;
+    const mazeY = h * 0.2;
     sizeRef.current = { w, h, mazeX, mazeY, mazeSize };
   }, []);
 
@@ -144,34 +136,28 @@ export default function GyroMaze() {
     };
   }, []);
 
-  // Convert maze-normalized coords to canvas coords
   const toCanvas = useCallback((nx: number, ny: number) => {
     const { mazeX, mazeY, mazeSize } = sizeRef.current;
     return { x: mazeX + nx * mazeSize, y: mazeY + ny * mazeSize };
   }, []);
 
-  // Line-circle collision
   const lineCircleCollide = useCallback((
     x1: number, y1: number, x2: number, y2: number,
     cx: number, cy: number, r: number
-  ): { hit: boolean; nx: number; ny: number; pen: number } => {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
+  ) => {
+    const dx = x2 - x1, dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len === 0) return { hit: false, nx: 0, ny: 0, pen: 0 };
-    const ux = dx / len;
-    const uy = dy / len;
-    const fx = cx - x1;
-    const fy = cy - y1;
+    const ux = dx / len, uy = dy / len;
+    const fx = cx - x1, fy = cy - y1;
     let t = fx * ux + fy * uy;
     t = Math.max(0, Math.min(len, t));
-    const closestX = x1 + ux * t;
-    const closestY = y1 + uy * t;
-    const distX = cx - closestX;
-    const distY = cy - closestY;
+    const closestX = x1 + ux * t, closestY = y1 + uy * t;
+    const distX = cx - closestX, distY = cy - closestY;
     const dist = Math.sqrt(distX * distX + distY * distY);
-    if (dist < r + WALL_THICKNESS * dprRef.current * 0.5) {
-      const pen = r + WALL_THICKNESS * dprRef.current * 0.5 - dist;
+    const wallR = WALL_THICKNESS * dprRef.current * 0.5;
+    if (dist < r + wallR) {
+      const pen = r + wallR - dist;
       const nx = dist > 0 ? distX / dist : 0;
       const ny = dist > 0 ? distY / dist : 1;
       return { hit: true, nx, ny, pen };
@@ -183,6 +169,7 @@ export default function GyroMaze() {
     if (hasGyro && gyroPermission === 'prompt') {
       await requestGyroPermission();
     }
+    calibrationRef.current = { beta: 0, gamma: 0, calibrated: false };
     setupCanvas();
     resetBall();
     setTrapHits(0);
@@ -190,10 +177,9 @@ export default function GyroMaze() {
     setWonPrize(null);
     trappedRef.current = false;
     trapCooldownRef.current = 0;
+    tiltRef.current = { x: 0, y: 0 };
     startTimeRef.current = Date.now();
     setPhase('playing');
-
-    // Elapsed timer
     elapsedIntervalRef.current = setInterval(() => {
       if (phaseRef.current === 'playing') {
         setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -201,62 +187,73 @@ export default function GyroMaze() {
     }, 1000);
   }, [hasGyro, gyroPermission, requestGyroPermission, setupCanvas, resetBall]);
 
-  // Gyroscope input
+  // ── Gyroscope with calibration ──
   useEffect(() => {
     if (phase !== 'playing') return;
-
     const handleOrientation = (e: DeviceOrientationEvent) => {
-      const gamma = (e.gamma || 0) / 45; // left-right tilt, -1..1
-      const beta = ((e.beta || 0) - 30) / 45; // front-back tilt, shifted for holding angle
+      const beta = e.beta || 0;
+      const gamma = e.gamma || 0;
+      if (!calibrationRef.current.calibrated) {
+        calibrationRef.current = { beta, gamma, calibrated: true };
+      }
+      const cal = calibrationRef.current;
+      const dx = (gamma - cal.gamma) / 30;
+      const dy = (beta - cal.beta) / 30;
       tiltRef.current = {
-        x: Math.max(-1, Math.min(1, gamma)),
-        y: Math.max(-1, Math.min(1, beta)),
+        x: Math.max(-1, Math.min(1, dx)),
+        y: Math.max(-1, Math.min(1, dy)),
       };
     };
-
     window.addEventListener('deviceorientation', handleOrientation);
     return () => window.removeEventListener('deviceorientation', handleOrientation);
   }, [phase]);
 
-  // Touch/mouse fallback for desktop
+  // ── Touch/Mouse: ball accelerates toward touch point ──
   const onPointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (phase !== 'playing') return;
+    touchActiveRef.current = true;
     const c = canvasRef.current;
     if (!c) return;
     const rect = c.getBoundingClientRect();
-    const cx = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const cy = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    dragRef.current = { active: true, lastX: cx - rect.left, lastY: cy - rect.top };
+    const dpr = dprRef.current;
+    const cx = ('touches' in e ? e.touches[0].clientX : e.clientX);
+    const cy = ('touches' in e ? e.touches[0].clientY : e.clientY);
+    touchPosRef.current = { x: (cx - rect.left) * dpr, y: (cy - rect.top) * dpr };
+    updateTiltFromTouch();
   }, [phase]);
 
   const onPointerMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (!dragRef.current.active || phase !== 'playing') return;
+    if (!touchActiveRef.current || phase !== 'playing') return;
     const c = canvasRef.current;
     if (!c) return;
     const rect = c.getBoundingClientRect();
-    const cx = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const cy = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const x = cx - rect.left;
-    const y = cy - rect.top;
-    const dx = x - dragRef.current.lastX;
-    const dy = y - dragRef.current.lastY;
-    tiltRef.current = {
-      x: Math.max(-1, Math.min(1, dx * 0.05)),
-      y: Math.max(-1, Math.min(1, dy * 0.05)),
-    };
-    dragRef.current.lastX = x;
-    dragRef.current.lastY = y;
+    const dpr = dprRef.current;
+    const cx = ('touches' in e ? e.touches[0].clientX : e.clientX);
+    const cy = ('touches' in e ? e.touches[0].clientY : e.clientY);
+    touchPosRef.current = { x: (cx - rect.left) * dpr, y: (cy - rect.top) * dpr };
+    updateTiltFromTouch();
   }, [phase]);
 
   const onPointerUp = useCallback(() => {
-    dragRef.current.active = false;
+    touchActiveRef.current = false;
     tiltRef.current = { x: 0, y: 0 };
   }, []);
 
-  // Game loop
+  const updateTiltFromTouch = useCallback(() => {
+    const ball = ballRef.current;
+    const touch = touchPosRef.current;
+    const dx = touch.x - ball.x;
+    const dy = touch.y - ball.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 5) { tiltRef.current = { x: 0, y: 0 }; return; }
+    const maxDist = 150 * dprRef.current;
+    const strength = Math.min(1, dist / maxDist);
+    tiltRef.current = { x: (dx / dist) * strength, y: (dy / dist) * strength };
+  }, []);
+
+  // ── Game loop ──
   useEffect(() => {
     if (phase !== 'playing') return;
-
     const c = canvasRef.current;
     if (!c) return;
     const ctx = c.getContext('2d');
@@ -267,6 +264,7 @@ export default function GyroMaze() {
       const { w: W, h: H, mazeX, mazeY, mazeSize } = sizeRef.current;
       const dpr = dprRef.current;
       const ball = ballRef.current;
+      const time = Date.now() * 0.003;
 
       ctx.clearRect(0, 0, W, H);
 
@@ -278,17 +276,15 @@ export default function GyroMaze() {
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, W, H);
 
-      /* ── Maze board background ── */
-      const boardPad = 8 * dpr;
-      ctx.fillStyle = 'rgba(16,185,129,0.04)';
+      /* ── Maze board ── */
+      const bp = 8 * dpr;
+      ctx.fillStyle = 'rgba(16,185,129,0.03)';
       ctx.beginPath();
-      ctx.roundRect(mazeX - boardPad, mazeY - boardPad, mazeSize + boardPad * 2, mazeSize + boardPad * 2, 16 * dpr);
+      ctx.roundRect(mazeX - bp, mazeY - bp, mazeSize + bp * 2, mazeSize + bp * 2, 14 * dpr);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(16,185,129,0.15)';
+      ctx.strokeStyle = 'rgba(16,185,129,0.12)';
       ctx.lineWidth = 1.5 * dpr;
       ctx.stroke();
-
-      // Inner board darker
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fillRect(mazeX, mazeY, mazeSize, mazeSize);
 
@@ -296,93 +292,78 @@ export default function GyroMaze() {
       for (const [tx, ty] of TRAP_POSITIONS) {
         const tp = toCanvas(tx, ty);
         const tr = TRAP_RADIUS * dpr;
-        // Hole shadow
-        const holeGrad = ctx.createRadialGradient(tp.x, tp.y, 0, tp.x, tp.y, tr * 1.5);
-        holeGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
-        holeGrad.addColorStop(0.6, 'rgba(0,0,0,0.4)');
-        holeGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = holeGrad;
-        ctx.beginPath();
-        ctx.arc(tp.x, tp.y, tr * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        // Hole
+        const hg = ctx.createRadialGradient(tp.x, tp.y, 0, tp.x, tp.y, tr * 1.5);
+        hg.addColorStop(0, 'rgba(0,0,0,0.8)');
+        hg.addColorStop(0.6, 'rgba(0,0,0,0.3)');
+        hg.addColorStop(1, 'transparent');
+        ctx.fillStyle = hg;
+        ctx.beginPath(); ctx.arc(tp.x, tp.y, tr * 1.5, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#1a0505';
-        ctx.beginPath();
-        ctx.arc(tp.x, tp.y, tr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(239,68,68,0.3)';
+        ctx.beginPath(); ctx.arc(tp.x, tp.y, tr, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(239,68,68,0.35)';
         ctx.lineWidth = 1.5 * dpr;
         ctx.stroke();
       }
 
-      /* ── Goal ── */
-      const goal = toCanvas(GOAL_POS[0], GOAL_POS[1]);
-      const gr = GOAL_RADIUS * dpr;
-      // Goal glow
-      const time = Date.now() * 0.003;
-      const glowPulse = 0.5 + Math.sin(time) * 0.3;
-      ctx.save();
-      ctx.shadowBlur = 25 * dpr * glowPulse;
-      ctx.shadowColor = ACCENT_FROM;
-      ctx.fillStyle = 'rgba(16,185,129,0.15)';
-      ctx.beginPath();
-      ctx.arc(goal.x, goal.y, gr * 1.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      // Goal circle
-      const goalGrad = ctx.createRadialGradient(goal.x, goal.y, 0, goal.x, goal.y, gr);
-      goalGrad.addColorStop(0, 'rgba(16,185,129,0.3)');
-      goalGrad.addColorStop(1, 'rgba(6,182,212,0.15)');
-      ctx.fillStyle = goalGrad;
-      ctx.beginPath();
-      ctx.arc(goal.x, goal.y, gr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = ACCENT_FROM;
-      ctx.lineWidth = 2 * dpr;
-      ctx.stroke();
-      // Gift emoji
-      ctx.font = `${gr * 1.1}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🎁', goal.x, goal.y);
+      /* ── 4 Goal zones ── */
+      for (let i = 0; i < GOALS.length; i++) {
+        const [gx, gy] = GOALS[i];
+        const gp = toCanvas(gx, gy);
+        const gr = GOAL_RADIUS * dpr;
+        const pulse = 0.5 + Math.sin(time + i * 1.5) * 0.3;
+        ctx.save();
+        ctx.shadowBlur = 22 * dpr * pulse;
+        ctx.shadowColor = GOAL_COLORS[i];
+        ctx.fillStyle = GOAL_COLORS[i] + '18';
+        ctx.beginPath(); ctx.arc(gp.x, gp.y, gr * 1.4, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        const gg = ctx.createRadialGradient(gp.x, gp.y, 0, gp.x, gp.y, gr);
+        gg.addColorStop(0, GOAL_COLORS[i] + '40');
+        gg.addColorStop(1, GOAL_COLORS[i] + '10');
+        ctx.fillStyle = gg;
+        ctx.beginPath(); ctx.arc(gp.x, gp.y, gr, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = GOAL_COLORS[i];
+        ctx.lineWidth = 2 * dpr;
+        ctx.stroke();
+        ctx.font = `${gr * 1.1}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(GOAL_EMOJIS[i], gp.x, gp.y);
+      }
 
       /* ── Maze walls ── */
-      ctx.strokeStyle = 'rgba(16,185,129,0.5)';
+      ctx.strokeStyle = 'rgba(16,185,129,0.55)';
       ctx.lineWidth = WALL_THICKNESS * dpr;
       ctx.lineCap = 'round';
       for (const [x1, y1, x2, y2] of MAZE_WALLS) {
         const p1 = toCanvas(x1, y1);
         const p2 = toCanvas(x2, y2);
-        // Wall glow
         ctx.save();
-        ctx.shadowBlur = 6 * dpr;
-        ctx.shadowColor = 'rgba(16,185,129,0.2)';
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
+        ctx.shadowBlur = 5 * dpr;
+        ctx.shadowColor = 'rgba(16,185,129,0.15)';
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
         ctx.restore();
       }
 
       /* ── Physics ── */
       if (!trappedRef.current) {
+        // Update tilt from touch (tracks ball position changes)
+        if (touchActiveRef.current) updateTiltFromTouch();
+
         const tilt = tiltRef.current;
-        ball.vx += tilt.x * GRAVITY_SCALE * dpr;
-        ball.vy += tilt.y * GRAVITY_SCALE * dpr;
+        ball.vx += tilt.x * ACCEL * dpr;
+        ball.vy += tilt.y * ACCEL * dpr;
         ball.vx *= FRICTION;
         ball.vy *= FRICTION;
 
-        // Clamp speed
         const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
         if (speed > MAX_SPEED * dpr) {
-          const scale = (MAX_SPEED * dpr) / speed;
-          ball.vx *= scale;
-          ball.vy *= scale;
+          const s = (MAX_SPEED * dpr) / speed;
+          ball.vx *= s; ball.vy *= s;
         }
 
         ball.x += ball.vx;
         ball.y += ball.vy;
-
         const br = BALL_RADIUS * dpr;
 
         // Wall collisions
@@ -393,12 +374,10 @@ export default function GyroMaze() {
           if (col.hit) {
             ball.x += col.nx * col.pen;
             ball.y += col.ny * col.pen;
-            // Reflect velocity
             const dot = ball.vx * col.nx + ball.vy * col.ny;
             ball.vx -= 1.8 * dot * col.nx;
             ball.vy -= 1.8 * dot * col.ny;
-            ball.vx *= 0.5;
-            ball.vy *= 0.5;
+            ball.vx *= 0.5; ball.vy *= 0.5;
             getSoundEngine().peg(Math.floor(Math.random() * 5));
           }
         }
@@ -407,78 +386,101 @@ export default function GyroMaze() {
         if (trapCooldownRef.current <= 0) {
           for (const [tx, ty] of TRAP_POSITIONS) {
             const tp = toCanvas(tx, ty);
-            const dx = ball.x - tp.x;
-            const dy = ball.y - tp.y;
+            const dx = ball.x - tp.x, dy = ball.y - tp.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < (TRAP_RADIUS + BALL_RADIUS * 0.5) * dpr) {
               getSoundEngine().miss();
               setTrapHits(h => h + 1);
               trappedRef.current = true;
-              trapCooldownRef.current = 60; // frames of immunity after respawn
-              // Teleport back to start after brief delay
-              setTimeout(() => {
-                resetBall();
-                trappedRef.current = false;
-              }, 500);
+              trapCooldownRef.current = 60;
+              setTimeout(() => { resetBall(); trappedRef.current = false; }, 500);
               break;
             }
           }
-        } else {
-          trapCooldownRef.current--;
+        } else { trapCooldownRef.current--; }
+
+        // Goal collision — any of the 4 goals
+        for (let i = 0; i < GOALS.length; i++) {
+          const gp = toCanvas(GOALS[i][0], GOALS[i][1]);
+          const dx = ball.x - gp.x, dy = ball.y - gp.y;
+          if (Math.sqrt(dx * dx + dy * dy) < (GOAL_RADIUS + BALL_RADIUS * 0.3) * dpr) {
+            getSoundEngine().swish();
+            setWonPrize(selectRandomPrize(prizes));
+            setPhase('victory');
+            if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+            return;
+          }
         }
 
-        // Goal collision
-        const dx = ball.x - goal.x;
-        const dy = ball.y - goal.y;
-        const goalDist = Math.sqrt(dx * dx + dy * dy);
-        if (goalDist < (GOAL_RADIUS + BALL_RADIUS * 0.3) * dpr) {
-          // WIN!
-          getSoundEngine().swish();
-          const prize = selectRandomPrize(prizes);
-          setWonPrize(prize);
-          setPhase('victory');
-          if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+        // Auto-assist after 20s — subtle push toward nearest goal
+        const elapsedSec = (Date.now() - startTimeRef.current) / 1000;
+        if (elapsedSec > 20) {
+          let nearestGoal = GOALS[0];
+          let nearestDist = Infinity;
+          for (const g of GOALS) {
+            const gp = toCanvas(g[0], g[1]);
+            const dx = ball.x - gp.x, dy = ball.y - gp.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < nearestDist) { nearestDist = d; nearestGoal = g; }
+          }
+          const gp = toCanvas(nearestGoal[0], nearestGoal[1]);
+          const dx = gp.x - ball.x, dy = gp.y - ball.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d > 1) {
+            const assistForce = Math.min(0.08, (elapsedSec - 20) * 0.004) * dpr;
+            ball.vx += (dx / d) * assistForce;
+            ball.vy += (dy / d) * assistForce;
+          }
         }
       }
 
       /* ── Draw ball ── */
       const br = BALL_RADIUS * dpr;
-      // Shadow
       ctx.beginPath();
       ctx.ellipse(ball.x + 2 * dpr, ball.y + 3 * dpr, br * 0.9, br * 0.5, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fill();
-      // Ball
       const ballGrad = ctx.createRadialGradient(ball.x - br * 0.3, ball.y - br * 0.3, br * 0.1, ball.x, ball.y, br);
       ballGrad.addColorStop(0, '#e0e7ff');
       ballGrad.addColorStop(0.4, '#a5b4fc');
       ballGrad.addColorStop(1, '#6366f1');
-      ctx.beginPath();
-      ctx.arc(ball.x, ball.y, br, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, br, 0, Math.PI * 2);
       ctx.fillStyle = trappedRef.current ? 'rgba(239,68,68,0.5)' : ballGrad;
       ctx.fill();
-      // Highlight
-      ctx.beginPath();
-      ctx.arc(ball.x - br * 0.25, ball.y - br * 0.3, br * 0.3, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(ball.x - br * 0.25, ball.y - br * 0.3, br * 0.3, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.fill();
 
+      /* ── Touch indicator (when touching) ── */
+      if (touchActiveRef.current) {
+        const tp = touchPosRef.current;
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.strokeStyle = ACCENT_FROM;
+        ctx.lineWidth = 2 * dpr;
+        ctx.setLineDash([4 * dpr, 4 * dpr]);
+        ctx.beginPath(); ctx.moveTo(ball.x, ball.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(tp.x, tp.y, 12 * dpr, 0, Math.PI * 2);
+        ctx.strokeStyle = ACCENT_FROM;
+        ctx.stroke();
+        ctx.restore();
+      }
+
       /* ── Tilt indicator ── */
-      const indicatorX = W / 2;
-      const indicatorY = mazeY + mazeSize + 40 * dpr;
-      const indR = 20 * dpr;
-      // Outer ring
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      const indX = W / 2;
+      const indY = mazeY + mazeSize + 35 * dpr;
+      const indR = 18 * dpr;
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1.5 * dpr;
-      ctx.beginPath();
-      ctx.arc(indicatorX, indicatorY, indR, 0, Math.PI * 2);
-      ctx.stroke();
-      // Dot showing tilt
-      const dotX = indicatorX + tiltRef.current.x * indR * 0.8;
-      const dotY = indicatorY + tiltRef.current.y * indR * 0.8;
+      ctx.beginPath(); ctx.arc(indX, indY, indR, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = ACCENT_FROM;
       ctx.beginPath();
-      ctx.arc(dotX, dotY, 4 * dpr, 0, Math.PI * 2);
+      ctx.arc(
+        indX + tiltRef.current.x * indR * 0.8,
+        indY + tiltRef.current.y * indR * 0.8,
+        3.5 * dpr, 0, Math.PI * 2
+      );
       ctx.fill();
 
       animRef.current = requestAnimationFrame(loop);
@@ -489,28 +491,22 @@ export default function GyroMaze() {
       cancelAnimationFrame(animRef.current);
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
     };
-  }, [phase, prizes, toCanvas, lineCircleCollide, resetBall]);
+  }, [phase, prizes, toCanvas, lineCircleCollide, resetBall, updateTiltFromTouch]);
 
   return (
     <div
       className="game-container noise-overlay flex flex-col items-center"
-      style={{
-        background: 'radial-gradient(ellipse at 50% 20%, #0f2a1f 0%, #081510 50%, #030a07 100%)',
-      }}
+      style={{ background: 'radial-gradient(ellipse at 50% 20%, #0f2a1f 0%, #081510 50%, #030a07 100%)' }}
     >
       {/* Header */}
       <div className="w-full max-w-[400px] flex flex-col items-center pt-8 pb-2 z-10" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
         <h1
           className="text-[24px] font-black tracking-tight text-center"
-          style={{
-            background: `linear-gradient(135deg, ${ACCENT_FROM}, ${ACCENT_TO})`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
+          style={{ background: `linear-gradient(135deg, ${ACCENT_FROM}, ${ACCENT_TO})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
         >
           Gyro Maze
         </h1>
-        <p className="text-white/30 text-xs mt-1">Inclinez pour guider la bille vers le cadeau 🎁</p>
+        <p className="text-white/30 text-xs mt-1">Guidez la bille vers un des 4 cadeaux 🎁</p>
       </div>
 
       {/* HUD */}
@@ -552,27 +548,25 @@ export default function GyroMaze() {
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
           <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 30%, #0f2a1f 0%, #081510 50%, #030a07 100%)' }} />
           <div className="relative z-10 flex flex-col items-center gap-5 px-8">
-            <div className="text-6xl" style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}>🎁</div>
+            <div className="flex gap-3 text-4xl" style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}>
+              <span>🎁</span><span>🎁</span><span>🎁</span><span>🎁</span>
+            </div>
             <h2 className="text-[28px] font-extrabold text-white tracking-tight text-center" style={{ animation: 'fadeInUp 0.6s ease-out both' }}>
               Gyro Maze
             </h2>
             <p className="text-white/35 text-[13px] text-center max-w-[260px] leading-relaxed" style={{ animation: 'fadeInUp 0.6s ease-out 0.1s both' }}>
-              Inclinez votre téléphone pour guider la bille à travers le labyrinthe.<br />
-              <span className="text-white/20 text-[11px]">Évitez les trous rouges · Rejoignez le cadeau</span>
+              Guidez la bille depuis le centre vers l&apos;un des 4 cadeaux sur les bords.<br />
+              <span className="text-white/20 text-[11px]">Évitez les trous rouges dans les coins</span>
             </p>
             {hasGyro === false && (
               <p className="text-amber-400/60 text-[11px] text-center" style={{ animation: 'fadeIn 0.5s ease-out 0.3s both' }}>
-                Gyroscope non détecté — glissez avec le doigt
+                Gyroscope non détecté — touchez/glissez pour jouer
               </p>
             )}
             <button
               onClick={startGame}
               className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.96]"
-              style={{
-                background: `linear-gradient(135deg, ${ACCENT_FROM}, ${ACCENT_TO})`,
-                boxShadow: `0 12px 40px -10px ${ACCENT_FROM}80`,
-                animation: 'fadeInUp 0.6s ease-out 0.2s both',
-              }}
+              style={{ background: `linear-gradient(135deg, ${ACCENT_FROM}, ${ACCENT_TO})`, boxShadow: `0 12px 40px -10px ${ACCENT_FROM}80`, animation: 'fadeInUp 0.6s ease-out 0.2s both' }}
             >
               Jouer 🏁
             </button>
@@ -582,12 +576,7 @@ export default function GyroMaze() {
 
       {/* Victory */}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen
-          prize={wonPrize}
-          onClose={() => setPhase('ready')}
-          accentFrom={ACCENT_FROM}
-          accentTo={ACCENT_TO}
-        />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={ACCENT_FROM} accentTo={ACCENT_TO} />
       )}
     </div>
   );

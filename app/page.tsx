@@ -49,6 +49,14 @@ const GAMES = [
     accentFrom: "#ef4444",
     accentTo: "#f59e0b",
   },
+  {
+    href: "/angry-ball",
+    title: "Angry Ball",
+    desc: "Lancez la boule dans les trous !",
+    emoji: "😡",
+    accentFrom: "#f97316",
+    accentTo: "#ef4444",
+  },
 ];
 
 export default function Home() {
