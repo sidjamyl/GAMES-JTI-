@@ -16,9 +16,9 @@ const GAMES = [
   },
   {
     href: "/whac-a-mole",
-    title: "Whac-A-Mole",
-    desc: "Tapez les taupes avant qu'elles disparaissent",
-    emoji: "🔨",
+    title: "Gift Catcher",
+    desc: "Attrapez un cadeau avant qu'il disparaisse !",
+    emoji: "🎁",
     accentFrom: GOLD_BRIGHT,
     accentTo: GOLD,
   },
