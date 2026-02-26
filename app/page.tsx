@@ -25,6 +25,14 @@ const GAMES = [
     accentFrom: "#f59e0b",
     accentTo: "#ef4444",
   },
+  {
+    href: "/whac-a-mole",
+    title: "Whac-A-Mole",
+    desc: "Tapez les taupes avant qu'elles disparaissent",
+    emoji: "🔨",
+    accentFrom: "#f59e0b",
+    accentTo: "#dc2626",
+  },
 ];
 
 export default function Home() {
