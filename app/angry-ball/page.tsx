@@ -9,7 +9,8 @@ import VictoryScreen from '../components/VictoryScreen';
 /* ═══════════════════════════════════════════════
    ANGRY BALL — Winston & Camel Edition
    Horizontal slingshot game with cups.
-   Fixed physics, no rigging at all.
+   Proper physics, dynamic layout, visible walls.
+   No rigging at all.
    ═══════════════════════════════════════════════ */
 
 const GOLD = '#d4a843';
@@ -18,14 +19,19 @@ const AMBER = '#c9842b';
 const CREAM = '#f5e6c8';
 const SIENNA = '#a0522d';
 
-const GRAVITY = 0.30;
+// Physics constants — tuned for natural feel
+const GRAVITY = 0.35;
 const BALL_RADIUS = 13;
-const BOUNCE = 0.50;
-const GROUND_FRICTION = 0.90;
+const BOUNCE = 0.45;
+const GROUND_FRICTION = 0.88;
 const MAX_PULL = 120;
-const LAUNCH_MULTIPLIER = 0.19;
+const LAUNCH_MULTIPLIER = 0.18;
 const GAME_ASPECT = 1.9;
 const MAX_ATTEMPTS = 5;
+const RESTITUTION = 0.35;
+
+const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#ef4444'];
+const SLING_ANCHOR = { x: 0.10, y: 0.58 };
 
 interface Cup {
   x: number; y: number;
@@ -34,34 +40,15 @@ interface Cup {
   prize: Prize | null;
 }
 
-const CUP_TEMPLATES: Omit<Cup, 'prize'>[] = [
-  { x: 0.52, y: 0.80, w: 0.065, h: 0.08, color: GOLD },
-  { x: 0.66, y: 0.56, w: 0.060, h: 0.08, color: AMBER },
-  { x: 0.80, y: 0.76, w: 0.060, h: 0.08, color: SIENNA },
-  { x: 0.90, y: 0.48, w: 0.055, h: 0.08, color: GOLD_BRIGHT },
-  { x: 0.72, y: 0.36, w: 0.055, h: 0.08, color: '#ef4444' },
-];
-
 interface Obstacle {
   x: number; y: number;
   w: number; h: number;
 }
 
-const OBSTACLES: Obstacle[] = [
-  { x: 0.38, y: 0.55, w: 0.030, h: 0.18 },
-  { x: 0.56, y: 0.40, w: 0.090, h: 0.025 },
-  { x: 0.46, y: 0.72, w: 0.075, h: 0.025 },
-];
-
-const PLATFORMS: { x: number; y: number; w: number }[] = [
-  { x: 0.52, y: 0.88, w: 0.10 },
-  { x: 0.66, y: 0.64, w: 0.10 },
-  { x: 0.80, y: 0.84, w: 0.10 },
-  { x: 0.90, y: 0.56, w: 0.09 },
-  { x: 0.72, y: 0.44, w: 0.09 },
-];
-
-const SLING_ANCHOR = { x: 0.10, y: 0.58 };
+interface PlatformDef {
+  x: number; y: number;
+  w: number;
+}
 
 interface BallState {
   x: number; y: number;
@@ -71,6 +58,76 @@ interface BallState {
   rotation: number;
   trail: { x: number; y: number; alpha: number }[];
   stillFrames: number;
+}
+
+/* ── Dynamic layout generation ── */
+function generateLayout(allPrizes: Prize[]): {
+  cups: Cup[];
+  obstacles: Obstacle[];
+  platforms: PlatformDef[];
+} {
+  const cups: Cup[] = [];
+  const platforms: PlatformDef[] = [];
+  const obstacles: Obstacle[] = [];
+
+  // Zone-based placement prevents overlap while keeping variety
+  const zones = [
+    { xMin: 0.44, xMax: 0.56, yMin: 0.68, yMax: 0.82 },
+    { xMin: 0.56, xMax: 0.72, yMin: 0.46, yMax: 0.60 },
+    { xMin: 0.72, xMax: 0.87, yMin: 0.66, yMax: 0.80 },
+    { xMin: 0.82, xMax: 0.94, yMin: 0.38, yMax: 0.52 },
+    { xMin: 0.60, xMax: 0.78, yMin: 0.26, yMax: 0.40 },
+  ];
+
+  const numCups = 4 + Math.floor(Math.random() * 2); // 4-5 cups
+  const shuffled = [...zones].sort(() => Math.random() - 0.5).slice(0, numCups);
+
+  for (let i = 0; i < shuffled.length; i++) {
+    const zone = shuffled[i];
+    const x = zone.xMin + Math.random() * (zone.xMax - zone.xMin);
+    const y = zone.yMin + Math.random() * (zone.yMax - zone.yMin);
+    const w = 0.055 + Math.random() * 0.012;
+    const h = 0.075 + Math.random() * 0.01;
+
+    cups.push({
+      x, y,
+      w, h,
+      color: CUP_COLORS[i % CUP_COLORS.length],
+      prize: selectRandomPrize(allPrizes),
+    });
+
+    platforms.push({
+      x,
+      y: y + h + 0.008,
+      w: w + 0.035,
+    });
+  }
+
+  // Random obstacles between sling and cups
+  const numObs = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < numObs; i++) {
+    const isVertical = Math.random() > 0.5;
+    let ox: number, oy: number;
+    let tries = 0;
+
+    do {
+      ox = 0.28 + Math.random() * 0.52;
+      oy = 0.28 + Math.random() * 0.48;
+      tries++;
+    } while (
+      tries < 40 &&
+      cups.some(c => Math.abs(c.x - ox) < 0.09 && Math.abs(c.y - oy) < 0.10)
+    );
+
+    obstacles.push({
+      x: ox,
+      y: oy,
+      w: isVertical ? 0.025 + Math.random() * 0.008 : 0.065 + Math.random() * 0.035,
+      h: isVertical ? 0.13 + Math.random() * 0.07 : 0.020 + Math.random() * 0.008,
+    });
+  }
+
+  return { cups, obstacles, platforms };
 }
 
 export default function AngryBall() {
@@ -88,12 +145,15 @@ export default function AngryBall() {
     launched: false, landed: false, rotation: 0, trail: [], stillFrames: 0,
   });
   const cupsRef = useRef<Cup[]>([]);
+  const obstaclesRef = useRef<Obstacle[]>([]);
+  const platformsRef = useRef<PlatformDef[]>([]);
   const draggingRef = useRef(false);
   const animRef = useRef(0);
   const phaseRef = useRef<GamePhase>('loading');
   const dprRef = useRef(1);
   const gameAreaRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
   const attemptsRef = useRef(0);
+  const lastTimeRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { fetchPrizes().then(p => { setPrizes(p); setPhase('ready'); }); }, []);
@@ -132,13 +192,6 @@ export default function AngryBall() {
     return { x: g.x + nx * g.w, y: g.y + ny * g.h };
   }, []);
 
-  const assignCupPrizes = useCallback(() => {
-    cupsRef.current = CUP_TEMPLATES.map(t => ({
-      ...t,
-      prize: selectRandomPrize(prizes),
-    }));
-  }, [prizes]);
-
   const resetBall = useCallback(() => {
     const anchor = toGame(SLING_ANCHOR.x, SLING_ANCHOR.y);
     ballRef.current = {
@@ -150,21 +203,29 @@ export default function AngryBall() {
     draggingRef.current = false;
   }, [toGame]);
 
-  // Render loop
+  /* ── Render loop with proper physics ── */
   const startLoop = useCallback(() => {
     const c = canvasRef.current;
     if (!c) return;
     const ctx = c.getContext('2d');
     if (!ctx) return;
+    lastTimeRef.current = performance.now();
 
-    const loop = () => {
+    const loop = (now: number) => {
       if (phaseRef.current !== 'playing') return;
+
+      // Delta time for frame-independent physics (capped at ~30fps min)
+      const rawDt = (now - lastTimeRef.current) / 1000;
+      const dt = Math.min(rawDt, 0.033);
+      lastTimeRef.current = now;
+      const dtScale = dt * 60; // normalize to 60fps baseline
+
       const cw = c.width, ch = c.height;
       const dpr = dprRef.current;
       const g = gameAreaRef.current;
       const ball = ballRef.current;
       const br = BALL_RADIUS * dpr;
-      const time = Date.now() * 0.003;
+      const time = now * 0.003;
 
       ctx.clearRect(0, 0, cw, ch);
 
@@ -187,83 +248,158 @@ export default function AngryBall() {
 
       /* ── Ground ── */
       const ground = toGame(0, 0.95);
-      ctx.fillStyle = 'rgba(212,168,67,0.03)';
+      ctx.fillStyle = 'rgba(212,168,67,0.04)';
       ctx.fillRect(g.x, ground.y, g.w, g.y + g.h - ground.y);
-      ctx.strokeStyle = GOLD + '15';
-      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = GOLD + '25';
+      ctx.lineWidth = 1.5 * dpr;
       ctx.beginPath(); ctx.moveTo(g.x, ground.y); ctx.lineTo(g.x + g.w, ground.y); ctx.stroke();
 
       /* ── Platforms & Cups ── */
       for (let i = 0; i < cupsRef.current.length; i++) {
         const cup = cupsRef.current[i];
-        const plat = PLATFORMS[i];
+        const plat = platformsRef.current[i];
+        if (!plat) continue;
         const pp = toGame(plat.x, plat.y);
         const pw = plat.w * g.w;
 
-        // Platform
-        ctx.fillStyle = GOLD + '10';
-        ctx.fillRect(pp.x - pw / 2, pp.y, pw, 4 * dpr);
-        ctx.strokeStyle = GOLD + '20';
+        // Platform — bright and visible
+        ctx.save();
+        ctx.shadowBlur = 6 * dpr;
+        ctx.shadowColor = GOLD + '30';
+        const platGrad = ctx.createLinearGradient(pp.x - pw / 2, pp.y, pp.x + pw / 2, pp.y + 5 * dpr);
+        platGrad.addColorStop(0, GOLD + '30');
+        platGrad.addColorStop(1, AMBER + '20');
+        ctx.fillStyle = platGrad;
+        ctx.fillRect(pp.x - pw / 2, pp.y, pw, 5 * dpr);
+        ctx.strokeStyle = GOLD + '50';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.strokeRect(pp.x - pw / 2, pp.y, pw, 5 * dpr);
+        ctx.restore();
+
+        // Support column
+        ctx.fillStyle = GOLD + '0a';
+        ctx.fillRect(pp.x - 2 * dpr, pp.y + 5 * dpr, 4 * dpr, ground.y - pp.y - 5 * dpr);
+        ctx.strokeStyle = GOLD + '12';
         ctx.lineWidth = 1 * dpr;
-        ctx.strokeRect(pp.x - pw / 2, pp.y, pw, 4 * dpr);
+        ctx.strokeRect(pp.x - 2 * dpr, pp.y + 5 * dpr, 4 * dpr, ground.y - pp.y - 5 * dpr);
 
-        // Support
-        ctx.fillStyle = GOLD + '06';
-        ctx.fillRect(pp.x - 2 * dpr, pp.y + 4 * dpr, 4 * dpr, ground.y - pp.y - 4 * dpr);
-
-        // Cup (U-shape)
+        // Cup (U-shape) — bright and visible
         const cp = toGame(cup.x, cup.y);
-        const cw2 = cup.w * g.w;
-        const ch2 = cup.h * g.h;
+        const cupW = cup.w * g.w;
+        const cupH = cup.h * g.h;
 
         ctx.save();
-        ctx.shadowBlur = 12 * dpr;
-        ctx.shadowColor = cup.color + '30';
-        ctx.fillStyle = cup.color + '15';
+        ctx.shadowBlur = 14 * dpr;
+        ctx.shadowColor = cup.color + '40';
+
+        // Cup fill
+        const cupGrad = ctx.createLinearGradient(cp.x - cupW / 2, cp.y, cp.x + cupW / 2, cp.y + cupH);
+        cupGrad.addColorStop(0, cup.color + '25');
+        cupGrad.addColorStop(1, cup.color + '10');
+        ctx.fillStyle = cupGrad;
         ctx.beginPath();
-        ctx.moveTo(cp.x - cw2 / 2, cp.y);
-        ctx.lineTo(cp.x - cw2 / 2, cp.y + ch2);
-        ctx.arcTo(cp.x - cw2 / 2, cp.y + ch2 + 6 * dpr, cp.x, cp.y + ch2 + 6 * dpr, 6 * dpr);
-        ctx.lineTo(cp.x + cw2 / 2 - 6 * dpr, cp.y + ch2 + 6 * dpr);
-        ctx.arcTo(cp.x + cw2 / 2, cp.y + ch2 + 6 * dpr, cp.x + cw2 / 2, cp.y + ch2, 6 * dpr);
-        ctx.lineTo(cp.x + cw2 / 2, cp.y);
+        ctx.moveTo(cp.x - cupW / 2, cp.y);
+        ctx.lineTo(cp.x - cupW / 2, cp.y + cupH);
+        ctx.arcTo(cp.x - cupW / 2, cp.y + cupH + 6 * dpr, cp.x, cp.y + cupH + 6 * dpr, 6 * dpr);
+        ctx.lineTo(cp.x + cupW / 2 - 6 * dpr, cp.y + cupH + 6 * dpr);
+        ctx.arcTo(cp.x + cupW / 2, cp.y + cupH + 6 * dpr, cp.x + cupW / 2, cp.y + cupH, 6 * dpr);
+        ctx.lineTo(cp.x + cupW / 2, cp.y);
         ctx.fill();
-        ctx.strokeStyle = cup.color + '50';
-        ctx.lineWidth = 2 * dpr;
+
+        // Cup walls — thick and bright
+        ctx.strokeStyle = cup.color + '70';
+        ctx.lineWidth = 2.5 * dpr;
         ctx.stroke();
         ctx.restore();
 
         // Cup opening glow
         const pulse = 0.5 + Math.sin(time + i * 1.2) * 0.3;
         ctx.save();
-        ctx.shadowBlur = 10 * dpr * pulse;
+        ctx.shadowBlur = 12 * dpr * pulse;
         ctx.shadowColor = cup.color;
-        ctx.strokeStyle = cup.color + '40';
-        ctx.lineWidth = 2 * dpr;
-        ctx.beginPath(); ctx.moveTo(cp.x - cw2 / 2, cp.y); ctx.lineTo(cp.x + cw2 / 2, cp.y); ctx.stroke();
+        ctx.strokeStyle = cup.color + '55';
+        ctx.lineWidth = 2.5 * dpr;
+        ctx.beginPath(); ctx.moveTo(cp.x - cupW / 2, cp.y); ctx.lineTo(cp.x + cupW / 2, cp.y); ctx.stroke();
         ctx.restore();
 
-        // Prize emoji inside cup
+        // Side wall indicators — small ticks to emphasize walls
+        ctx.strokeStyle = cup.color + '35';
+        ctx.lineWidth = 1 * dpr;
+        for (let tick = 0; tick < 3; tick++) {
+          const ty = cp.y + cupH * (0.2 + tick * 0.3);
+          ctx.beginPath();
+          ctx.moveTo(cp.x - cupW / 2, ty);
+          ctx.lineTo(cp.x - cupW / 2 + 4 * dpr, ty);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cp.x + cupW / 2, ty);
+          ctx.lineTo(cp.x + cupW / 2 - 4 * dpr, ty);
+          ctx.stroke();
+        }
+
+        // Prize emoji
         if (cup.prize) {
-          ctx.font = `${Math.min(14, cw2 * 0.5) * dpr}px serif`;
+          ctx.font = `${Math.min(14, cupW * 0.5) * dpr}px serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.globalAlpha = 0.5;
-          ctx.fillText(cup.prize.emoji, cp.x, cp.y + ch2 * 0.5);
+          ctx.globalAlpha = 0.6;
+          ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.45);
           ctx.globalAlpha = 1;
         }
       }
 
-      /* ── Obstacles ── */
-      for (const obs of OBSTACLES) {
+      /* ── Obstacles — BRIGHT and VISIBLE walls ── */
+      for (const obs of obstaclesRef.current) {
         const op = toGame(obs.x, obs.y);
         const ow = obs.w * g.w;
         const oh = obs.h * g.h;
-        ctx.fillStyle = GOLD + '08';
-        ctx.fillRect(op.x - ow / 2, op.y - oh / 2, ow, oh);
+
+        ctx.save();
+        // Outer glow
+        ctx.shadowBlur = 10 * dpr;
+        ctx.shadowColor = GOLD + '35';
+
+        // Fill with gradient
+        const obsGrad = ctx.createLinearGradient(op.x - ow / 2, op.y - oh / 2, op.x + ow / 2, op.y + oh / 2);
+        obsGrad.addColorStop(0, GOLD + '22');
+        obsGrad.addColorStop(0.5, AMBER + '18');
+        obsGrad.addColorStop(1, GOLD + '22');
+        ctx.fillStyle = obsGrad;
+        ctx.beginPath();
+        ctx.roundRect(op.x - ow / 2, op.y - oh / 2, ow, oh, 3 * dpr);
+        ctx.fill();
+
+        // Bright border
+        ctx.strokeStyle = GOLD + '60';
+        ctx.lineWidth = 2 * dpr;
+        ctx.stroke();
+
+        // Inner detail lines (wall texture)
         ctx.strokeStyle = GOLD + '18';
-        ctx.lineWidth = 1.5 * dpr;
-        ctx.strokeRect(op.x - ow / 2, op.y - oh / 2, ow, oh);
+        ctx.lineWidth = 1 * dpr;
+        if (ow > oh) {
+          // Horizontal wall — vertical dividers
+          const segs = Math.max(2, Math.floor(ow / (12 * dpr)));
+          for (let s = 1; s < segs; s++) {
+            const sx = op.x - ow / 2 + (ow / segs) * s;
+            ctx.beginPath();
+            ctx.moveTo(sx, op.y - oh / 2 + 2 * dpr);
+            ctx.lineTo(sx, op.y + oh / 2 - 2 * dpr);
+            ctx.stroke();
+          }
+        } else {
+          // Vertical wall — horizontal dividers
+          const segs = Math.max(2, Math.floor(oh / (12 * dpr)));
+          for (let s = 1; s < segs; s++) {
+            const sy = op.y - oh / 2 + (oh / segs) * s;
+            ctx.beginPath();
+            ctx.moveTo(op.x - ow / 2 + 2 * dpr, sy);
+            ctx.lineTo(op.x + ow / 2 - 2 * dpr, sy);
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
       }
 
       /* ── Slingshot ── */
@@ -275,7 +411,7 @@ export default function AngryBall() {
       const rightPostX = anchor.x + postSpread;
       const postTop = anchor.y - postH;
 
-      // Posts — wood tone
+      // Posts
       ctx.fillStyle = SIENNA + '80';
       ctx.fillRect(leftPostX - postW / 2, postTop, postW, postH + 20 * dpr);
       ctx.fillRect(rightPostX - postW / 2, postTop, postW, postH + 20 * dpr);
@@ -305,97 +441,135 @@ export default function AngryBall() {
         }
       }
 
-      /* ── Ball physics (NO rigging) ── */
+      /* ══════════════════════════════════════
+         PHYSICS — proper collision response
+         ══════════════════════════════════════ */
       if (ball.launched && !ball.landed) {
-        ball.vy += GRAVITY * dpr;
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-        ball.rotation += ball.vx * 0.012;
+        // Semi-implicit Euler: update velocity, then position
+        ball.vy += GRAVITY * dpr * dtScale;
+        ball.x += ball.vx * dtScale;
+        ball.y += ball.vy * dtScale;
+        ball.rotation += ball.vx * 0.012 * dtScale;
 
         // Trail
         ball.trail.push({ x: ball.x, y: ball.y, alpha: 1 });
         if (ball.trail.length > 16) ball.trail.shift();
         ball.trail.forEach(t => { t.alpha *= 0.88; });
 
-        // Boundaries
-        if (ball.x - br < g.x) { ball.x = g.x + br; ball.vx *= -BOUNCE; }
-        if (ball.x + br > g.x + g.w) { ball.x = g.x + g.w - br; ball.vx *= -BOUNCE; }
-        if (ball.y - br < g.y) { ball.y = g.y + br; ball.vy *= -BOUNCE; }
+        // Boundary walls
+        if (ball.x - br < g.x) { ball.x = g.x + br; ball.vx = Math.abs(ball.vx) * BOUNCE; }
+        if (ball.x + br > g.x + g.w) { ball.x = g.x + g.w - br; ball.vx = -Math.abs(ball.vx) * BOUNCE; }
+        if (ball.y - br < g.y) { ball.y = g.y + br; ball.vy = Math.abs(ball.vy) * BOUNCE; }
 
-        // Ground bounce
+        // Ground collision
         if (ball.y + br > ground.y) {
           ball.y = ground.y - br;
-          ball.vy *= -BOUNCE;
+          if (Math.abs(ball.vy) > 1.5 * dpr) getSoundEngine().impact();
+          ball.vy = -Math.abs(ball.vy) * BOUNCE;
           ball.vx *= GROUND_FRICTION;
           if (Math.abs(ball.vy) < 1 * dpr) ball.vy = 0;
-          getSoundEngine().impact();
         }
 
-        // Obstacle collisions
-        for (const obs of OBSTACLES) {
+        // Obstacle collisions — proper restitution
+        for (const obs of obstaclesRef.current) {
           const op = toGame(obs.x, obs.y);
           const ow = obs.w * g.w;
           const oh = obs.h * g.h;
           const left = op.x - ow / 2, right = op.x + ow / 2;
           const top = op.y - oh / 2, bottom = op.y + oh / 2;
+
+          // Find closest point on AABB to ball center
           const nearX = Math.max(left, Math.min(right, ball.x));
           const nearY = Math.max(top, Math.min(bottom, ball.y));
           const dx = ball.x - nearX, dy = ball.y - nearY;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < br) {
+
+          if (dist < br && dist > 0) {
             const pen = br - dist;
-            const nx = dist > 0 ? dx / dist : 0;
-            const ny = dist > 0 ? dy / dist : -1;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            // Push out
             ball.x += nx * pen;
             ball.y += ny * pen;
+            // Proper reflection with restitution
             const dot = ball.vx * nx + ball.vy * ny;
-            ball.vx -= 1.8 * dot * nx;
-            ball.vy -= 1.8 * dot * ny;
-            ball.vx *= 0.7; ball.vy *= 0.7;
+            if (dot < 0) {
+              ball.vx -= (1 + RESTITUTION) * dot * nx;
+              ball.vy -= (1 + RESTITUTION) * dot * ny;
+            }
+            getSoundEngine().peg(Math.floor(Math.random() * 3));
+          } else if (dist === 0) {
+            // Ball center is inside obstacle — push out along shortest axis
+            const dxL = ball.x - left, dxR = right - ball.x;
+            const dyT = ball.y - top, dyB = bottom - ball.y;
+            const minD = Math.min(dxL, dxR, dyT, dyB);
+            if (minD === dxL) { ball.x = left - br; ball.vx = -Math.abs(ball.vx) * BOUNCE; }
+            else if (minD === dxR) { ball.x = right + br; ball.vx = Math.abs(ball.vx) * BOUNCE; }
+            else if (minD === dyT) { ball.y = top - br; ball.vy = -Math.abs(ball.vy) * BOUNCE; }
+            else { ball.y = bottom + br; ball.vy = Math.abs(ball.vy) * BOUNCE; }
             getSoundEngine().peg(Math.floor(Math.random() * 3));
           }
         }
 
-        // Platform collisions
-        for (const plat of PLATFORMS) {
+        // Platform collisions — proper direction-aware
+        for (const plat of platformsRef.current) {
           const pp = toGame(plat.x, plat.y);
           const pw = plat.w * g.w;
           const platLeft = pp.x - pw / 2;
           const platRight = pp.x + pw / 2;
           const platTop = pp.y;
-          const platH = 4 * dpr;
+          const platH = 5 * dpr;
+          const platBottom = platTop + platH;
+
+          // Check overlap
           if (ball.x + br > platLeft && ball.x - br < platRight &&
-              ball.y + br > platTop && ball.y - br < platTop + platH) {
-            if (ball.vy > 0 && ball.y < platTop + platH / 2) {
+              ball.y + br > platTop && ball.y - br < platBottom) {
+            // Determine from which side the ball is colliding
+            const overlapTop = (ball.y + br) - platTop;
+            const overlapBottom = platBottom - (ball.y - br);
+            const overlapLeft = (ball.x + br) - platLeft;
+            const overlapRight = platRight - (ball.x - br);
+            const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
+
+            if (minOverlap === overlapTop && ball.vy > 0) {
               ball.y = platTop - br;
-              ball.vy *= -BOUNCE;
+              ball.vy = -Math.abs(ball.vy) * BOUNCE;
               ball.vx *= GROUND_FRICTION;
-              getSoundEngine().impact();
-            } else if (ball.vy < 0 && ball.y > platTop + platH / 2) {
-              ball.y = platTop + platH + br;
-              ball.vy *= -BOUNCE;
+              if (Math.abs(ball.vy) > 1 * dpr) getSoundEngine().impact();
+            } else if (minOverlap === overlapBottom && ball.vy < 0) {
+              ball.y = platBottom + br;
+              ball.vy = Math.abs(ball.vy) * BOUNCE;
+            } else if (minOverlap === overlapLeft && ball.vx > 0) {
+              ball.x = platLeft - br;
+              ball.vx = -Math.abs(ball.vx) * BOUNCE;
+            } else if (minOverlap === overlapRight && ball.vx < 0) {
+              ball.x = platRight + br;
+              ball.vx = Math.abs(ball.vx) * BOUNCE;
             }
           }
         }
 
-        // Cup detection
+        // Cup detection — proper collision
         for (const cup of cupsRef.current) {
           const cp = toGame(cup.x, cup.y);
-          const cw2 = cup.w * g.w;
-          const ch2 = cup.h * g.h;
-          const cupLeft = cp.x - cw2 / 2;
-          const cupRight = cp.x + cw2 / 2;
+          const cupW = cup.w * g.w;
+          const cupH = cup.h * g.h;
+          const cupLeft = cp.x - cupW / 2;
+          const cupRight = cp.x + cupW / 2;
           const cupTop = cp.y;
-          const cupBottom = cp.y + ch2;
+          const cupBottom = cp.y + cupH;
+          const wallThick = 4 * dpr;
 
+          // Enter cup from the top — must be falling and within the opening
           if (ball.x > cupLeft + br * 0.3 && ball.x < cupRight - br * 0.3 &&
               ball.y + br > cupTop && ball.y < cupBottom && ball.vy > 0) {
-            ball.vx *= 0.3;
-            ball.vy *= 0.2;
+            // Slow the ball inside the cup
+            ball.vx *= 0.85;
+            ball.vy *= 0.85;
             if (Math.abs(ball.vy) < 2 * dpr && Math.abs(ball.vx) < 2 * dpr) {
               ball.landed = true;
               ball.x = cp.x;
-              ball.y = cupTop + ch2 * 0.5;
+              ball.y = cupTop + cupH * 0.45;
               ball.vx = 0; ball.vy = 0;
               getSoundEngine().swish();
               setShowLanded(true);
@@ -407,27 +581,38 @@ export default function AngryBall() {
             }
           }
 
-          // Cup side walls
-          if (ball.y > cupTop && ball.y < cupBottom) {
-            if (ball.x + br > cupLeft && ball.x < cupLeft + 4 * dpr && ball.vx > 0) {
+          // Left wall collision
+          if (ball.y > cupTop + br * 0.5 && ball.y < cupBottom) {
+            if (ball.x + br > cupLeft && ball.x + br < cupLeft + wallThick + br && ball.vx > 0) {
               ball.x = cupLeft - br;
-              ball.vx *= -0.5;
+              const dot = ball.vx;
+              ball.vx = -Math.abs(dot) * BOUNCE;
+              getSoundEngine().peg(0);
             }
-            if (ball.x - br < cupRight && ball.x > cupRight - 4 * dpr && ball.vx < 0) {
+            // Right wall collision
+            if (ball.x - br < cupRight && ball.x - br > cupRight - wallThick - br && ball.vx < 0) {
               ball.x = cupRight + br;
-              ball.vx *= -0.5;
+              const dot = ball.vx;
+              ball.vx = Math.abs(dot) * BOUNCE;
+              getSoundEngine().peg(0);
             }
+          }
+
+          // Bottom wall collision (inside cup)
+          if (ball.x > cupLeft && ball.x < cupRight &&
+              ball.y + br > cupBottom && ball.y - br < cupBottom + wallThick && ball.vy > 0) {
+            ball.y = cupBottom - br;
+            ball.vy = -Math.abs(ball.vy) * BOUNCE * 0.5;
           }
         }
 
-        // Track stillness — if ball barely moves for 60 frames, reset it
-        if (Math.abs(ball.vx) < 0.3 * dpr && Math.abs(ball.vy) < 0.3 * dpr) {
+        // Stillness detection — ball stopped = missed shot
+        if (Math.abs(ball.vx) < 0.25 * dpr && Math.abs(ball.vy) < 0.25 * dpr) {
           ball.stillFrames++;
         } else {
           ball.stillFrames = 0;
         }
 
-        // Ball stopped — missed shot
         if (ball.stillFrames > 90 && !ball.landed) {
           attemptsRef.current++;
           setAttempts(attemptsRef.current);
@@ -473,7 +658,7 @@ export default function AngryBall() {
       ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fill();
       ctx.restore();
 
-      // Body — angry gold/red ball
+      // Body — angry red ball
       const ballGrad = ctx.createRadialGradient(-br * 0.3, -br * 0.3, br * 0.1, 0, 0, br);
       ballGrad.addColorStop(0, '#fee2e2');
       ballGrad.addColorStop(0.3, '#ef4444');
@@ -512,15 +697,15 @@ export default function AngryBall() {
 
       /* ── Pull indicator ── */
       if (draggingRef.current && !ball.launched) {
-        const dx = anchor.x - ball.x;
-        const dy = anchor.y - ball.y;
-        const pullDist = Math.sqrt(dx * dx + dy * dy);
+        const pdx = anchor.x - ball.x;
+        const pdy = anchor.y - ball.y;
+        const pullDist = Math.sqrt(pdx * pdx + pdy * pdy);
         const maxPull = MAX_PULL * dpr;
         const strength = Math.min(pullDist / maxPull, 1);
 
         // Trajectory preview
-        const launchVx = dx * LAUNCH_MULTIPLIER;
-        const launchVy = dy * LAUNCH_MULTIPLIER;
+        const launchVx = pdx * LAUNCH_MULTIPLIER;
+        const launchVy = pdy * LAUNCH_MULTIPLIER;
         ctx.save();
         ctx.globalAlpha = 0.15;
         let px = anchor.x, py = anchor.y;
@@ -569,10 +754,13 @@ export default function AngryBall() {
       }
 
       /* ── Attempt counter ── */
-      ctx.fillStyle = CREAM + '30';
+      ctx.fillStyle = CREAM + '40';
       ctx.font = `bold ${10 * dpr}px system-ui`;
       ctx.textAlign = 'right';
-      ctx.fillText(`${MAX_ATTEMPTS - attemptsRef.current} tir${MAX_ATTEMPTS - attemptsRef.current > 1 ? 's' : ''} restant${MAX_ATTEMPTS - attemptsRef.current > 1 ? 's' : ''}`, g.x + g.w - 10 * dpr, g.y + 16 * dpr);
+      ctx.fillText(
+        `${MAX_ATTEMPTS - attemptsRef.current} tir${MAX_ATTEMPTS - attemptsRef.current > 1 ? 's' : ''} restant${MAX_ATTEMPTS - attemptsRef.current > 1 ? 's' : ''}`,
+        g.x + g.w - 10 * dpr, g.y + 16 * dpr
+      );
 
       animRef.current = requestAnimationFrame(loop);
     };
@@ -581,7 +769,11 @@ export default function AngryBall() {
 
   const start = useCallback(() => {
     setupCanvas();
-    assignCupPrizes();
+    // Generate a fresh random layout for each game
+    const layout = generateLayout(prizes);
+    cupsRef.current = layout.cups;
+    obstaclesRef.current = layout.obstacles;
+    platformsRef.current = layout.platforms;
     resetBall();
     setWonPrize(null);
     setAttempts(0);
@@ -591,7 +783,7 @@ export default function AngryBall() {
     setPhase('playing');
     setTimeout(() => startLoop(), 50);
     return () => cancelAnimationFrame(animRef.current);
-  }, [prizes, setupCanvas, resetBall, startLoop, assignCupPrizes]);
+  }, [prizes, setupCanvas, resetBall, startLoop]);
 
   // Input handling
   const getCanvasPos = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -704,7 +896,7 @@ export default function AngryBall() {
               </h1>
               <p style={{ color: CREAM + '60' }} className="text-[13px] leading-relaxed text-center max-w-[260px]">
                 Tirez la boule en arrière puis relâchez<br />pour la lancer dans un des trous !
-                <br /><span style={{ color: CREAM + '30' }} className="text-[11px]">{MAX_ATTEMPTS} tirs disponibles</span>
+                <br /><span style={{ color: CREAM + '35' }} className="text-[11px]">Terrain aléatoire à chaque partie • {MAX_ATTEMPTS} tirs</span>
               </p>
               {gameOver && (
                 <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>

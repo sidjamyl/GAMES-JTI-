@@ -22,9 +22,11 @@ const SIENNA = '#a0522d';
 const BALL_RADIUS = 8;
 const GOAL_RADIUS = 12;
 const WALL_THICKNESS = 3;
-const FRICTION = 0.94;
-const ACCEL = 0.55;
-const MAX_SPEED = 4.5;
+const FRICTION = 0.96;
+const ACCEL = 0.42;
+const MAX_SPEED = 3.5;
+const RESTITUTION = 0.25;
+const PHYSICS_SUBSTEPS = 3;
 
 const MAZE_COLS = 7;
 const MAZE_ROWS = 7;
@@ -348,8 +350,8 @@ export default function GyroMaze() {
         calibrationRef.current = { beta, gamma, calibrated: true };
       }
       const cal = calibrationRef.current;
-      const dx = (gamma - cal.gamma) / 30;
-      const dy = (beta - cal.beta) / 30;
+      const dx = (gamma - cal.gamma) / 25;
+      const dy = (beta - cal.beta) / 25;
       tiltRef.current = { x: Math.max(-1, Math.min(1, dx)), y: Math.max(-1, Math.min(1, dy)) };
     };
     window.addEventListener('deviceorientation', handle);
@@ -486,6 +488,9 @@ export default function GyroMaze() {
       if (touchActiveRef.current) updateTiltFromTouch();
 
       const tilt = tiltRef.current;
+      const br = BALL_RADIUS * dpr;
+
+      // Apply tilt acceleration and friction once per frame
       ball.vx += tilt.x * ACCEL * dpr;
       ball.vy += tilt.y * ACCEL * dpr;
       ball.vx *= FRICTION;
@@ -497,25 +502,31 @@ export default function GyroMaze() {
         ball.vx *= s; ball.vy *= s;
       }
 
-      ball.x += ball.vx;
-      ball.y += ball.vy;
-      const br = BALL_RADIUS * dpr;
+      // Substep movement + collision for stable physics
+      let hitWall = false;
+      for (let step = 0; step < PHYSICS_SUBSTEPS; step++) {
+        ball.x += ball.vx / PHYSICS_SUBSTEPS;
+        ball.y += ball.vy / PHYSICS_SUBSTEPS;
 
-      // Wall collisions
-      for (const wall of wallsRef.current) {
-        const p1 = toCanvas(wall.x1, wall.y1);
-        const p2 = toCanvas(wall.x2, wall.y2);
-        const col = lineCircleCollide(p1.x, p1.y, p2.x, p2.y, ball.x, ball.y, br);
-        if (col.hit) {
-          ball.x += col.nx * col.pen;
-          ball.y += col.ny * col.pen;
-          const dot = ball.vx * col.nx + ball.vy * col.ny;
-          ball.vx -= 1.8 * dot * col.nx;
-          ball.vy -= 1.8 * dot * col.ny;
-          ball.vx *= 0.5; ball.vy *= 0.5;
-          getSoundEngine().peg(Math.floor(Math.random() * 5));
+        for (const wall of wallsRef.current) {
+          const p1 = toCanvas(wall.x1, wall.y1);
+          const p2 = toCanvas(wall.x2, wall.y2);
+          const col = lineCircleCollide(p1.x, p1.y, p2.x, p2.y, ball.x, ball.y, br);
+          if (col.hit) {
+            // Push ball out of wall
+            ball.x += col.nx * col.pen;
+            ball.y += col.ny * col.pen;
+            // Only reflect if moving INTO the wall
+            const dot = ball.vx * col.nx + ball.vy * col.ny;
+            if (dot < 0) {
+              ball.vx -= (1 + RESTITUTION) * dot * col.nx;
+              ball.vy -= (1 + RESTITUTION) * dot * col.ny;
+            }
+            hitWall = true;
+          }
         }
       }
+      if (hitWall) getSoundEngine().peg(Math.floor(Math.random() * 5));
 
       // Goal collision
       for (const goal of goalsRef.current) {
