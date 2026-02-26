@@ -8,9 +8,10 @@ import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
-   PENDULUM — Polished timing game
-   Real pendulum physics. Detailed conveyor with 
-   rollers. Segmented rope. Articulated hook.
+   PENDULUM — Polished timing grab game
+   Pendulum swings continuously. Hook drops while
+   pendulum keeps swinging. Claw visually closes
+   around gift, lifts it back up. Particles, shake.
    ═══════════════════════════════════════════════ */
 
 interface ConveyorItem {
@@ -20,6 +21,12 @@ interface ConveyorItem {
   size: number;
   hue: number;
   bobPhase: number;
+  grabbed: boolean;
+}
+
+interface Particle {
+  x: number; y: number; vx: number; vy: number;
+  life: number; maxLife: number; size: number; color: string;
 }
 
 const GIFT_HUES = [0, 35, 55, 120, 210, 280, 340];
@@ -36,37 +43,59 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
   const phaseRef = useRef<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
+  const [missed, setMissed] = useState(false);
   const animRef = useRef<number>(0);
   const dprRef = useRef(1);
 
-  // Real pendulum: angle + angular velocity
-  const pendRef = useRef({ angle: 0.8, angVel: 0, dropping: false, hookY: 0, hookTargetY: 0, hookSpeed: 0 });
+  /* ── State refs ── */
+  const pendRef = useRef({
+    angle: 0.8, angVel: 0,
+    dropping: false, retracting: false,
+    extension: 0,        // how far the hook has extended (0 = at rest, positive = dropping)
+    extSpeed: 0,
+    clawOpen: 1,         // 1 = open, 0 = closed
+    clawTarget: 1,
+    frozenAngle: 0,      // angle locked at tap moment — hook drops straight down
+  });
   const conveyorRef = useRef<ConveyorItem[]>([]);
+  const caughtRef = useRef<{ prize: Prize; hue: number; size: number } | null>(null);
   const sizeRef = useRef({ w: 0, h: 0 });
   const timeRef = useRef(0);
-  const caughtRef = useRef<Prize | null>(null);
-  const retractingRef = useRef(false);
   const doneRef = useRef(false);
+  const particlesRef = useRef<Particle[]>([]);
+  const shakeRef = useRef({ amount: 0 });
 
-  const DAMPING = 0.9985;
+  const DAMPING = 0.9988;
   const G_ACCEL = 0.0012;
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
-  useEffect(() => { fetchPrizes().then((p) => { setPrizes(p); setPhase('ready'); }); }, []);
+  useEffect(() => { fetchPrizes().then(p => { setPrizes(p); setPhase('ready'); }); }, []);
+
+  const addParticles = (x: number, y: number, count: number, color: string) => {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 1.5 + Math.random() * 3;
+      particlesRef.current.push({
+        x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1.5,
+        life: 0, maxLife: 25 + Math.random() * 20,
+        size: 2 + Math.random() * 2.5, color,
+      });
+    }
+  };
 
   const initConveyor = useCallback((w: number, prizes: Prize[]) => {
     const items: ConveyorItem[] = [];
-    const count = 7 + Math.floor(Math.random() * 3);
-    const spacing = (w + 300) / count;
+    const count = 18 + Math.floor(Math.random() * 5);
+    const spacing = (w + 100) / count;
     for (let i = 0; i < count; i++) {
-      const prize = selectRandomPrize(prizes);
       items.push({
-        x: -80 + i * spacing,
-        prize,
-        speed: 0.6 + Math.random() * 0.4,
-        size: 38,
+        x: -40 + i * spacing,
+        prize: selectRandomPrize(prizes),
+        speed: 0.5 + Math.random() * 0.3,
+        size: 34,
         hue: GIFT_HUES[Math.floor(Math.random() * GIFT_HUES.length)],
         bobPhase: Math.random() * Math.PI * 2,
+        grabbed: false,
       });
     }
     conveyorRef.current = items;
@@ -87,14 +116,23 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
     sizeRef.current = { w, h };
 
     const pivotX = w / 2;
-    const pivotY = h * 0.07;
-    const ropeLen = h * 0.38;
+    const pivotY = h * 0.08;
+    const ropeRestLen = h * 0.28;
     const conveyorY = h * 0.72;
+    const targetDropY = conveyorY - 8; // where gifts sit
+    // maxExtension is computed dynamically per drop based on frozen angle
 
-    pendRef.current = { angle: 0.8, angVel: 0, dropping: false, hookY: 0, hookTargetY: conveyorY - 8, hookSpeed: 0 };
+    pendRef.current = {
+      angle: 0.75, angVel: 0,
+      dropping: false, retracting: false,
+      extension: 0, extSpeed: 0,
+      clawOpen: 1, clawTarget: 1,
+      frozenAngle: 0,
+    };
     caughtRef.current = null;
-    retractingRef.current = false;
     doneRef.current = false;
+    particlesRef.current = [];
+    shakeRef.current.amount = 0;
     initConveyor(w, prizes);
     timeRef.current = 0;
 
@@ -103,272 +141,479 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
       timeRef.current++;
+
+      // Screen shake
+      let sx = 0, sy = 0;
+      if (shakeRef.current.amount > 0) {
+        sx = (Math.random() - 0.5) * shakeRef.current.amount;
+        sy = (Math.random() - 0.5) * shakeRef.current.amount;
+        shakeRef.current.amount *= 0.88;
+        if (shakeRef.current.amount < 0.3) shakeRef.current.amount = 0;
+      }
+      ctx.translate(sx, sy);
+      ctx.clearRect(-10, -10, w + 20, h + 20);
 
       // Background
       const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-      bgGrad.addColorStop(0, BG_LIGHT);
-      bgGrad.addColorStop(0.5, BG_MID);
-      bgGrad.addColorStop(1, BG_DARK);
+      bgGrad.addColorStop(0, '#0e0b18');
+      bgGrad.addColorStop(0.4, '#14101f');
+      bgGrad.addColorStop(1, '#0a0812');
       ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(-10, -10, w + 20, h + 20);
 
-      // Subtle pattern
-      ctx.strokeStyle = `rgba(${goldRgb},0.02)`;
+      // Subtle grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.012)';
       ctx.lineWidth = 1;
-      for (let i = 0; i < h; i += 30) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
+      for (let gy = 0; gy < h; gy += 28) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
 
       const pend = pendRef.current;
 
-      // Real pendulum physics (simple pendulum ODE)
-      if (!pend.dropping) {
+      /* ── PENDULUM PHYSICS ── swing only when NOT dropping/retracting ── */
+      if (!pend.dropping && !pend.retracting) {
         const angAccel = -G_ACCEL * Math.sin(pend.angle);
         pend.angVel += angAccel;
         pend.angVel *= DAMPING;
         pend.angle += pend.angVel;
       }
+      // When dropping/retracting, use the frozen angle (hook goes straight down)
+      const activeAngle = (pend.dropping || pend.retracting) ? pend.frozenAngle : pend.angle;
 
-      const hookX = pivotX + Math.sin(pend.angle) * ropeLen;
-      let hookBaseY = pivotY + Math.cos(pend.angle) * ropeLen;
-
-      // Hook drop/retract
-      if (pend.dropping && !retractingRef.current) {
-        pend.hookSpeed += 0.15;
-        pend.hookY += pend.hookSpeed;
-        if (pend.hookY >= pend.hookTargetY) {
-          pend.hookY = pend.hookTargetY;
-          // Check collision
+      /* ── HOOK EXTENSION ── */
+      if (pend.dropping && !pend.retracting) {
+        pend.extSpeed += 0.18;
+        pend.extension += pend.extSpeed;
+        pend.clawTarget = 0.35; // partially close while descending
+        // Dynamic limit: compute max extension so hook Y reaches conveyor level at the frozen angle
+        // hookY = pivotY + cos(angle) * (ropeRestLen + extension) = targetDropY
+        // => extension = targetDropY / cos(angle) - ropeRestLen  (clamped so cos != 0)
+        const cosA = Math.max(0.3, Math.cos(activeAngle)); // clamp to avoid extreme extension at wide angles
+        const dynamicMax = Math.max(30, (targetDropY - pivotY) / cosA - ropeRestLen);
+        const currentHookY = pivotY + cosA * (ropeRestLen + pend.extension);
+        if (pend.extension >= dynamicMax || currentHookY >= targetDropY) {
+          pend.extension = Math.min(pend.extension, dynamicMax);
+          pend.extSpeed = 0;
+          // At bottom — check catch
+          const hookEndX = pivotX + Math.sin(activeAngle) * (ropeRestLen + pend.extension);
+          const hookEndY = pivotY + Math.cos(activeAngle) * (ropeRestLen + pend.extension);
+          let caught = false;
+          // Find the closest gift using box hitbox (AABB)
+          let bestDist = 999;
+          let bestItem: ConveyorItem | null = null;
           for (const item of conveyorRef.current) {
-            const dx = hookX - item.x;
-            const dy = pend.hookY - conveyorY;
-            if (Math.abs(dx) < item.size * 0.6 && Math.abs(dy) < item.size * 0.8) {
-              caughtRef.current = item.prize;
-              conveyorRef.current = conveyorRef.current.filter(it => it !== item);
-              try { getSoundEngine().impact(); } catch {}
-              break;
+            if (item.grabbed) continue;
+            const halfW = item.size * 0.6;  // generous horizontal hitbox
+            const giftTopY = conveyorY - item.size * 0.5 + 8; // top of the gift box (matches render)
+            const giftBottomY = giftTopY + item.size;
+            // Check if hook is within the box bounds (with generous margin)
+            const inX = Math.abs(hookEndX - item.x) < halfW;
+            const inY = hookEndY >= giftTopY - 8 && hookEndY <= giftBottomY + 8;
+            if (inX && inY) {
+              const dx = hookEndX - item.x;
+              const dist = Math.abs(dx);
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestItem = item;
+              }
             }
           }
-          if (!caughtRef.current) { try { getSoundEngine().miss(); } catch {} }
-          retractingRef.current = true;
-          pend.hookSpeed = 0;
+          if (bestItem) {
+            const item = bestItem;
+            item.grabbed = true;
+            caughtRef.current = { prize: item.prize, hue: item.hue, size: item.size };
+            pend.clawTarget = 0; // fully close
+            addParticles(hookEndX, hookEndY, 18, `hsl(${item.hue}, 60%, 60%)`);
+            addParticles(hookEndX, hookEndY, 10, GOLD_BRIGHT);
+            shakeRef.current.amount = 6;
+            try { getSoundEngine().impact(); } catch {}
+            caught = true;
+          }
+          if (!caught) {
+            pend.clawTarget = 0;
+            try { getSoundEngine().miss(); } catch {}
+          }
+          // Remove grabbed items from conveyor
+          conveyorRef.current = conveyorRef.current.filter(it => !it.grabbed);
+          // Begin retracting after small delay
+          pend.retracting = false;
+          setTimeout(() => { pend.retracting = true; pend.extSpeed = 0; }, 350);
         }
-      } else if (retractingRef.current) {
-        pend.hookSpeed += 0.12;
-        pend.hookY -= pend.hookSpeed;
-        if (pend.hookY <= 0) {
-          pend.hookY = 0;
-          doneRef.current = true;
-          const prize = caughtRef.current || selectRandomPrize(prizes);
-          setWonPrize(prize);
-          try { getSoundEngine().reveal(); } catch {}
-          setTimeout(() => setPhase('victory'), 500);
-          return;
+      } else if (pend.retracting) {
+        pend.extSpeed += 0.1;
+        pend.extension -= pend.extSpeed;
+        if (pend.extension <= 0) {
+          pend.extension = 0;
+          if (caughtRef.current) {
+            doneRef.current = true;
+            setWonPrize(caughtRef.current.prize);
+            try { getSoundEngine().victory(); } catch {}
+            setTimeout(() => setPhase('victory'), 500);
+            return;
+          } else {
+            // Missed — reset pendulum, keep playing with fast swing
+            pend.dropping = false;
+            pend.retracting = false;
+            pend.extension = 0;
+            pend.extSpeed = 0;
+            pend.clawOpen = 1;
+            pend.clawTarget = 1;
+            pend.angle = (pend.frozenAngle >= 0) ? 0.75 : -0.75; // restart from same side, full amplitude
+            pend.angVel = 0;
+            caughtRef.current = null;
+          }
         }
       }
 
-      const actualHookY = pend.dropping ? hookBaseY + pend.hookY : hookBaseY;
+      // Animate claw open/close smoothly
+      pend.clawOpen += (pend.clawTarget - pend.clawOpen) * 0.12;
 
-      // === RENDER ===
+      /* ── POSITIONS ── */
+      const totalLen = ropeRestLen + pend.extension;
+      const hookEndX = pivotX + Math.sin(activeAngle) * totalLen;
+      const hookEndY = pivotY + Math.cos(activeAngle) * totalLen;
 
-      // Support beam — metal I-beam look
-      const beamY = pivotY - 10;
-      const beamGrad = ctx.createLinearGradient(0, beamY, 0, beamY + 18);
-      beamGrad.addColorStop(0, '#6b5b4b');
-      beamGrad.addColorStop(0.3, MAHOGANY);
-      beamGrad.addColorStop(0.7, MAHOGANY);
-      beamGrad.addColorStop(1, '#4a3a2a');
+      /* ═══ RENDER ═══ */
+
+      // Support beam — industrial I-beam
+      const beamY = pivotY - 12;
+      const beamH = 20;
+      const beamGrad = ctx.createLinearGradient(0, beamY, 0, beamY + beamH);
+      beamGrad.addColorStop(0, '#5a4a60');
+      beamGrad.addColorStop(0.3, '#7a6a80');
+      beamGrad.addColorStop(0.7, '#6a5a70');
+      beamGrad.addColorStop(1, '#3a2a40');
       ctx.fillStyle = beamGrad;
-      ctx.fillRect(w * 0.12, beamY, w * 0.76, 18);
+      ctx.fillRect(w * 0.08, beamY, w * 0.84, beamH);
+      // Top/bottom flanges
+      ctx.fillStyle = '#8a7a90';
+      ctx.fillRect(w * 0.08, beamY, w * 0.84, 3);
+      ctx.fillRect(w * 0.08, beamY + beamH - 3, w * 0.84, 3);
       // Rivets
-      ctx.fillStyle = GOLD + '60';
-      for (let rx = w * 0.15; rx < w * 0.85; rx += 30) {
-        ctx.beginPath(); ctx.arc(rx, beamY + 9, 3, 0, Math.PI * 2); ctx.fill();
-      }
-      // Beam highlight
-      ctx.strokeStyle = GOLD + '15';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(w * 0.12, beamY + 1); ctx.lineTo(w * 0.88, beamY + 1); ctx.stroke();
-
-      // Rope — segmented chain
-      const segments = 12;
-      ctx.strokeStyle = GOLD + '90';
-      ctx.lineWidth = 2;
-      for (let s = 0; s < segments; s++) {
-        const t1 = s / segments;
-        const t2 = (s + 1) / segments;
-        const x1 = pivotX + (hookX - pivotX) * t1;
-        const y1 = pivotY + (actualHookY - pivotY) * t1;
-        const x2 = pivotX + (hookX - pivotX) * t2;
-        const y2 = pivotY + (actualHookY - pivotY) * t2;
-        // Slight sag for each segment
-        const midX = (x1 + x2) / 2;
-        const sag = Math.sin(t1 * Math.PI) * 3 + Math.sin(timeRef.current * 0.05 + s) * 0.5;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(midX + sag * 0.3, (y1 + y2) / 2 + sag, x2, y2);
-        ctx.stroke();
-        // Chain links
-        if (s % 2 === 0) {
-          ctx.fillStyle = AMBER + '50';
-          ctx.beginPath(); ctx.arc(x1, y1, 2.5, 0, Math.PI * 2); ctx.fill();
-        }
+      for (let rx = w * 0.12; rx < w * 0.9; rx += 28) {
+        const rivGrad = ctx.createRadialGradient(rx - 0.5, beamY + beamH / 2 - 0.5, 0, rx, beamY + beamH / 2, 3.5);
+        rivGrad.addColorStop(0, '#b0a0b8');
+        rivGrad.addColorStop(1, '#5a4a60');
+        ctx.fillStyle = rivGrad;
+        ctx.beginPath(); ctx.arc(rx, beamY + beamH / 2, 3.5, 0, Math.PI * 2); ctx.fill();
       }
 
       // Pivot mount
-      ctx.fillStyle = '#555';
-      ctx.beginPath(); ctx.arc(pivotX, pivotY, 6, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = GOLD + '40';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Hook — articulated claw
-      const hY = actualHookY;
-      const openness = retractingRef.current ? 0.1 : (pend.dropping ? 0.2 : 0.8);
-
-      // Hook body (metal cylinder)
-      const hookGrad = ctx.createLinearGradient(hookX - 8, hY, hookX + 8, hY);
-      hookGrad.addColorStop(0, '#888');
-      hookGrad.addColorStop(0.5, '#bbb');
-      hookGrad.addColorStop(1, '#888');
-      ctx.fillStyle = hookGrad;
-      ctx.beginPath(); ctx.roundRect(hookX - 7, hY - 4, 14, 14, 3); ctx.fill();
-      ctx.strokeStyle = GOLD + '50';
+      const pivGrad = ctx.createRadialGradient(pivotX - 1, pivotY - 1, 0, pivotX, pivotY, 7);
+      pivGrad.addColorStop(0, '#c0b0c8');
+      pivGrad.addColorStop(0.5, '#8a7a90');
+      pivGrad.addColorStop(1, '#4a3a50');
+      ctx.fillStyle = pivGrad;
+      ctx.beginPath(); ctx.arc(pivotX, pivotY, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Hook arms (3 prongs)
-      const armLen = 16;
-      const angles = [-openness * 0.6, 0, openness * 0.6];
-      ctx.strokeStyle = GOLD;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      for (const aOff of angles) {
-        const ax = hookX + Math.sin(aOff) * armLen;
-        const ay = hY + 10 + Math.cos(aOff) * armLen;
+      /* ── ROPE (chain with extension) ── */
+      const chainSegs = 14 + Math.floor(pend.extension / 15);
+      ctx.lineWidth = 2;
+      for (let s = 0; s < chainSegs; s++) {
+        const t1 = s / chainSegs;
+        const t2 = (s + 1) / chainSegs;
+        const x1 = pivotX + (hookEndX - pivotX) * t1;
+        const y1 = pivotY + (hookEndY - pivotY) * t1;
+        const x2 = pivotX + (hookEndX - pivotX) * t2;
+        const y2 = pivotY + (hookEndY - pivotY) * t2;
+        // Slight sag in each segment
+        const sagAmount = Math.sin(t1 * Math.PI) * (2 + pend.extension * 0.005);
+        const sway = Math.sin(timeRef.current * 0.04 + s * 0.7) * 0.6;
+        const perpX = -(y2 - y1); // perpendicular direction
+        const perpLen = Math.sqrt(perpX * perpX + (x2 - x1) * (x2 - x1)) || 1;
+        const offX = (perpX / perpLen) * (sagAmount + sway) * 0.15;
+
+        // Alternate chain link colors for depth
+        ctx.strokeStyle = s % 2 === 0 ? '#9a8aa0' : '#6a5a70';
         ctx.beginPath();
-        ctx.moveTo(hookX + Math.sin(aOff) * 3, hY + 10);
-        ctx.lineTo(ax, ay);
-        // Curved tip
-        ctx.quadraticCurveTo(ax + Math.sin(aOff) * 3, ay + 3, ax - Math.sin(aOff) * 2, ay + 1);
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo((x1 + x2) / 2 + offX, (y1 + y2) / 2 + sagAmount + sway, x2, y2);
         ctx.stroke();
+
+        // Chain link circle at joints
+        if (s % 3 === 0) {
+          ctx.fillStyle = '#b0a0b8';
+          ctx.beginPath(); ctx.arc(x1, y1, 2, 0, Math.PI * 2); ctx.fill();
+        }
       }
 
-      // Caught prize
-      if (caughtRef.current && (retractingRef.current || pend.dropping)) {
-        ctx.font = '26px serif';
+      /* ── CLAW/HOOK ── */
+      const hx = hookEndX;
+      const hy = hookEndY;
+      const open = pend.clawOpen;
+      const armLen = 18;
+
+      // Hook motor housing
+      ctx.save();
+      ctx.translate(hx, hy);
+      // Rotate housing to match rope angle
+      const ropeAngle = Math.atan2(hookEndX - pivotX, hookEndY - pivotY);
+      ctx.rotate(ropeAngle * 0.1); // subtle tilt
+
+      // Housing body
+      const housingGrad = ctx.createLinearGradient(-10, -6, 10, 10);
+      housingGrad.addColorStop(0, '#8a7a90');
+      housingGrad.addColorStop(0.5, '#b0a0b8');
+      housingGrad.addColorStop(1, '#5a4a60');
+      ctx.fillStyle = housingGrad;
+      ctx.beginPath(); ctx.roundRect(-10, -5, 20, 13, 4); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+      // Housing detail lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.moveTo(-8, -1); ctx.lineTo(8, -1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-8, 3); ctx.lineTo(8, 3); ctx.stroke();
+      // Bolts
+      ctx.fillStyle = '#ccc';
+      ctx.beginPath(); ctx.arc(-6, 1, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, 1, 1.5, 0, Math.PI * 2); ctx.fill();
+
+      ctx.restore();
+
+      // 3 prong claw arms
+      const drawClaw = (baseOffsetX: number, spreadDir: number) => {
+        const baseX = hx + baseOffsetX;
+        const baseY = hy + 8;
+        const spread = open * 14 * spreadDir;
+        const elbowX = baseX + spread * 0.3;
+        const elbowY = baseY + armLen * 0.45;
+        const tipX = baseX + spread;
+        const tipY = baseY + armLen;
+        // Arm shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(baseX + 1, baseY + 1);
+        ctx.lineTo(elbowX + 1, elbowY + 1);
+        ctx.lineTo(tipX + 1, tipY + 1);
+        ctx.stroke();
+        // Arm body
+        const armGrad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
+        armGrad.addColorStop(0, '#9a8aa0');
+        armGrad.addColorStop(0.5, '#c0b0c8');
+        armGrad.addColorStop(1, '#7a6a80');
+        ctx.strokeStyle = armGrad;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+        // Tip hook curl
+        const curlX = tipX - spreadDir * 5;
+        const curlY = tipY + 2;
+        ctx.strokeStyle = '#8a7a90';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.quadraticCurveTo(tipX - spreadDir * 2, tipY + 5, curlX, curlY);
+        ctx.stroke();
+        // Joint circles
+        ctx.fillStyle = '#b0a0b8';
+        ctx.beginPath(); ctx.arc(elbowX, elbowY, 2, 0, Math.PI * 2); ctx.fill();
+      };
+
+      drawClaw(-5, -1); // left arm
+      drawClaw(0, 0);   // center arm (goes straight down)
+      drawClaw(5, 1);    // right arm
+
+      // Caught gift — rendered as colored box held by closed claw
+      const caught = caughtRef.current;
+      if (caught) {
+        const gs = caught.size * 0.65;
+        const gx = hx;
+        const gy = hy + armLen + 12;
+
+        // Gift box body
+        const giftGrad = ctx.createLinearGradient(gx - gs / 2, gy - gs / 2, gx + gs / 2, gy + gs / 2);
+        giftGrad.addColorStop(0, `hsl(${caught.hue}, 60%, 55%)`);
+        giftGrad.addColorStop(1, `hsl(${caught.hue}, 60%, 35%)`);
+        ctx.fillStyle = giftGrad;
+        ctx.beginPath(); ctx.roundRect(gx - gs / 2, gy - gs / 2, gs, gs, 4); ctx.fill();
+        // Highlight
+        ctx.fillStyle = `hsla(${caught.hue}, 50%, 75%, 0.15)`;
+        ctx.fillRect(gx - gs / 2 + 2, gy - gs / 2 + 1, gs - 4, gs * 0.3);
+        // Ribbon
+        ctx.strokeStyle = `hsla(${(caught.hue + 40) % 360}, 60%, 80%, 0.5)`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(gx, gy - gs / 2); ctx.lineTo(gx, gy + gs / 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx - gs / 2, gy); ctx.lineTo(gx + gs / 2, gy); ctx.stroke();
+        // Bow
+        ctx.fillStyle = `hsl(${caught.hue}, 45%, 70%)`;
+        ctx.beginPath(); ctx.ellipse(gx - 3, gy - gs / 2 - 2, 4, 2.5, -0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(gx + 3, gy - gs / 2 - 2, 4, 2.5, 0.4, 0, Math.PI * 2); ctx.fill();
+        // Emoji
+        ctx.font = `${gs * 0.45}px serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(caughtRef.current.emoji, hookX, hY + armLen + 20);
+        ctx.fillText(caught.prize.emoji, gx, gy + 1);
+        // Glow
+        ctx.shadowColor = `hsl(${caught.hue}, 60%, 50%)`;
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = `hsla(${caught.hue}, 60%, 60%, 0.3)`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(gx - gs / 2, gy - gs / 2, gs, gs, 4); ctx.stroke();
+        ctx.shadowBlur = 0;
       }
 
-      // Conveyor belt — with rollers and depth
-      const beltY = conveyorY + 22;
-      const beltH = 28;
-      // Belt depth
-      ctx.fillStyle = `rgba(${mahoganyRgb},0.4)`;
-      ctx.fillRect(0, beltY + beltH, w, 8);
+      /* ── CONVEYOR ── */
+      const beltTopY = conveyorY + 18;
+      const beltH = 26;
+
       // Belt surface
-      const beltGrad = ctx.createLinearGradient(0, beltY, 0, beltY + beltH);
-      beltGrad.addColorStop(0, `rgba(${mahoganyRgb},0.75)`);
-      beltGrad.addColorStop(0.5, `rgba(${mahoganyRgb},0.6)`);
-      beltGrad.addColorStop(1, `rgba(${mahoganyRgb},0.75)`);
+      const beltGrad = ctx.createLinearGradient(0, beltTopY, 0, beltTopY + beltH);
+      beltGrad.addColorStop(0, '#4a3a50');
+      beltGrad.addColorStop(0.3, '#5a4a60');
+      beltGrad.addColorStop(0.7, '#4a3a50');
+      beltGrad.addColorStop(1, '#3a2a40');
       ctx.fillStyle = beltGrad;
-      ctx.fillRect(0, beltY, w, beltH);
-      // Belt treads
-      ctx.strokeStyle = GOLD + '10';
+      ctx.fillRect(0, beltTopY, w, beltH);
+      // Belt depth shadow
+      ctx.fillStyle = '#1a1020';
+      ctx.fillRect(0, beltTopY + beltH, w, 6);
+
+      // Belt treads (moving)
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
       ctx.lineWidth = 1;
-      const treadOffset = (timeRef.current * 0.8) % 18;
-      for (let tx = -18 + treadOffset; tx < w + 18; tx += 18) {
+      const treadOff = (timeRef.current * 0.7) % 16;
+      for (let tx = -16 + treadOff; tx < w + 16; tx += 16) {
         ctx.beginPath();
-        ctx.moveTo(tx, beltY);
-        ctx.lineTo(tx - 6, beltY + beltH);
-        ctx.stroke();
-      }
-      // Rollers at ends
-      for (const rx of [20, w - 20]) {
-        ctx.fillStyle = '#555';
-        ctx.beginPath(); ctx.arc(rx, beltY + beltH / 2, 10, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = GOLD + '30';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        // Roller spoke
-        const sAngle = timeRef.current * 0.03;
-        ctx.strokeStyle = '#777';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(rx + Math.cos(sAngle) * 7, beltY + beltH / 2 + Math.sin(sAngle) * 7);
-        ctx.lineTo(rx - Math.cos(sAngle) * 7, beltY + beltH / 2 - Math.sin(sAngle) * 7);
+        ctx.moveTo(tx, beltTopY + 1);
+        ctx.lineTo(tx - 5, beltTopY + beltH - 1);
         ctx.stroke();
       }
 
-      // Conveyor items — colorful gift boxes
+      // Rollers at ends
+      for (const rx of [16, w - 16]) {
+        // Roller body
+        const rollGrad = ctx.createRadialGradient(rx - 1, beltTopY + beltH / 2 - 1, 0, rx, beltTopY + beltH / 2, 11);
+        rollGrad.addColorStop(0, '#8a7a90');
+        rollGrad.addColorStop(0.7, '#5a4a60');
+        rollGrad.addColorStop(1, '#3a2a40');
+        ctx.fillStyle = rollGrad;
+        ctx.beginPath(); ctx.arc(rx, beltTopY + beltH / 2, 11, 0, Math.PI * 2); ctx.fill();
+        // Spinning spokes
+        const spAngle = timeRef.current * 0.025;
+        ctx.strokeStyle = '#6a5a70';
+        ctx.lineWidth = 1.5;
+        for (let sp = 0; sp < 4; sp++) {
+          const a = spAngle + sp * Math.PI / 2;
+          ctx.beginPath();
+          ctx.moveTo(rx + Math.cos(a) * 3, beltTopY + beltH / 2 + Math.sin(a) * 3);
+          ctx.lineTo(rx + Math.cos(a) * 9, beltTopY + beltH / 2 + Math.sin(a) * 9);
+          ctx.stroke();
+        }
+        // Center hub
+        ctx.fillStyle = '#9a8aa0';
+        ctx.beginPath(); ctx.arc(rx, beltTopY + beltH / 2, 3, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Side guards
+      ctx.fillStyle = '#3a2a40';
+      ctx.fillRect(0, conveyorY - 5, 5, beltH + 28);
+      ctx.fillRect(w - 5, conveyorY - 5, 5, beltH + 28);
+
+      /* ── CONVEYOR ITEMS ── */
       for (const item of conveyorRef.current) {
+        if (item.grabbed) continue; // skip grabbed items
         item.x += item.speed;
-        if (item.x > w + 80) item.x = -80;
+        if (item.x > w + 80) {
+          item.x = -80; // wrap around naturally
+        }
 
         const s = item.size;
-        const bobY = Math.sin(timeRef.current * 0.04 + item.bobPhase) * 2;
+        const bob = Math.sin(timeRef.current * 0.035 + item.bobPhase) * 2;
         const gx = item.x;
-        const gy = conveyorY - s + 14 + bobY;
+        const gy = conveyorY - s * 0.5 + 8 + bob;
 
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.1)';
-        ctx.beginPath(); ctx.ellipse(gx, conveyorY + 16, s * 0.4, 4, 0, 0, Math.PI * 2); ctx.fill();
+        // Shadow on belt
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.beginPath(); ctx.ellipse(gx, beltTopY - 1, s * 0.35, 3, 0, 0, Math.PI * 2); ctx.fill();
 
-        // Box
+        // Gift box
         const grad = ctx.createLinearGradient(gx - s / 2, gy, gx + s / 2, gy + s);
-        grad.addColorStop(0, `hsl(${item.hue}, 55%, 58%)`);
-        grad.addColorStop(1, `hsl(${item.hue}, 60%, 38%)`);
+        grad.addColorStop(0, `hsl(${item.hue}, 58%, 56%)`);
+        grad.addColorStop(1, `hsl(${item.hue}, 60%, 36%)`);
         ctx.fillStyle = grad;
-        ctx.beginPath(); ctx.roundRect(gx - s / 2, gy, s, s, 6); ctx.fill();
-        ctx.strokeStyle = `hsla(${item.hue}, 55%, 72%, 0.4)`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(gx - s / 2, gy, s, s, 5); ctx.fill();
 
-        // Lid
-        ctx.fillStyle = `hsla(${item.hue}, 55%, 68%, 0.2)`;
-        ctx.fillRect(gx - s / 2 + 2, gy + 2, s - 4, s * 0.25);
+        // Lid highlight
+        ctx.fillStyle = `hsla(${item.hue}, 50%, 72%, 0.15)`;
+        ctx.fillRect(gx - s / 2 + 2, gy + 1, s - 4, s * 0.25);
 
         // Ribbon
         const rh = (item.hue + 40) % 360;
-        ctx.strokeStyle = `hsla(${rh}, 70%, 78%, 0.6)`;
+        ctx.strokeStyle = `hsla(${rh}, 65%, 78%, 0.5)`;
         ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + s);
-        ctx.moveTo(gx - s / 2, gy + s / 2); ctx.lineTo(gx + s / 2, gy + s / 2);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + s); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx - s / 2, gy + s / 2); ctx.lineTo(gx + s / 2, gy + s / 2); ctx.stroke();
+
+        // Bow
+        ctx.fillStyle = `hsl(${item.hue}, 45%, 68%)`;
+        ctx.beginPath(); ctx.ellipse(gx - 4, gy - 2, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(gx + 4, gy - 2, 5, 3, 0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `hsl(${item.hue}, 50%, 58%)`;
+        ctx.beginPath(); ctx.arc(gx, gy - 1, 2.5, 0, Math.PI * 2); ctx.fill();
 
         // Emoji
-        ctx.font = `${s * 0.35}px serif`;
+        ctx.font = `${s * 0.33}px serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(item.prize.emoji, gx, gy + s / 2 + 2);
-
-        // Name tag below
-        ctx.fillStyle = CREAM + '40';
-        ctx.font = 'bold 8px system-ui';
-        ctx.fillText(item.prize.name.substring(0, 10), gx, conveyorY + 14);
       }
 
-      // Drop guide
+      /* ── DROP GUIDE ── */
       if (!pend.dropping) {
-        ctx.setLineDash([3, 5]);
-        ctx.strokeStyle = `rgba(${goldRgb},0.1)`;
+        ctx.setLineDash([3, 6]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(hookX, actualHookY + 30);
-        ctx.lineTo(hookX, conveyorY - 10);
+        ctx.moveTo(hookEndX, hookEndY + 30);
+        ctx.lineTo(hookEndX, conveyorY);
         ctx.stroke();
         ctx.setLineDash([]);
+        // Target dot
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.arc(hookEndX, conveyorY, 6, 0, Math.PI * 2); ctx.fill();
       }
 
-      // Instructions
+      /* ── PARTICLES ── */
+      for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+        const p = particlesRef.current[i];
+        p.life++;
+        if (p.life > p.maxLife) { particlesRef.current.splice(i, 1); continue; }
+        p.vy += 0.04;
+        p.x += p.vx; p.y += p.vy; p.vx *= 0.98;
+        const alpha = 1 - p.life / p.maxLife;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      /* ── HUD ── */
       if (!pend.dropping) {
-        ctx.fillStyle = CREAM + '30';
+        ctx.fillStyle = CREAM + '25';
         ctx.font = '12px system-ui';
         ctx.textAlign = 'center';
-        ctx.fillText('APPUYEZ pour lâcher le crochet', w / 2, h - 28);
+        ctx.fillText('APPUYEZ pour lâcher le crochet', w / 2, h - 22);
+      } else if (!pend.retracting && pend.extension > 0) {
+        ctx.fillStyle = CREAM + '20';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Descente...', w / 2, h - 22);
+      } else if (pend.retracting) {
+        ctx.fillStyle = caughtRef.current ? GOLD + '50' : CREAM + '15';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(caughtRef.current ? '🎁 Attrapé !' : 'Raté...', w / 2, h - 22);
       }
 
       animRef.current = requestAnimationFrame(loop);
@@ -383,12 +628,15 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
     const pend = pendRef.current;
     if (pend.dropping) return;
     pend.dropping = true;
-    pend.hookY = 0;
-    pend.hookSpeed = 0;
+    pend.frozenAngle = pend.angle; // lock angle — hook drops straight down from here
+    pend.angVel = 0;
+    pend.extension = 0;
+    pend.extSpeed = 0;
+    pend.clawTarget = 0.4;
     try { getSoundEngine().swoosh(); } catch {}
   };
 
-  const start = () => { setWonPrize(null); caughtRef.current = null; setPhase('playing'); };
+  const start = () => { setWonPrize(null); setMissed(false); caughtRef.current = null; setPhase('playing'); };
 
   return (
     <div className="game-container noise-overlay flex flex-col items-center justify-center" style={{ background: BG_DARK }}>
@@ -404,7 +652,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>Pendulum</h1>
           <p className="text-[14px] text-center max-w-[260px] leading-relaxed" style={{ color: CREAM + '60' }}>
-            Le pendule oscille. Tapez au bon moment<br/>pour attraper un cadeau !
+            Le pendule oscille. Tapez au bon moment<br/>pour attraper un cadeau sur le tapis !
           </p>
           <button onClick={start} className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-lg tracking-wide transition-all active:scale-[0.96]" style={{
             background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, boxShadow: `0 12px 40px -10px ${GOLD}80`,
@@ -418,6 +666,13 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       )}
       {phase === 'victory' && wonPrize && (
         <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} />
+      )}
+      {missed && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-30" style={{ background: 'rgba(10,8,18,0.85)' }}>
+          <div className="text-6xl mb-4" style={{ animation: 'victoryFloat 1.5s ease-in-out infinite' }}>😔</div>
+          <h2 className="text-2xl font-bold tracking-tight" style={{ color: CREAM + 'cc' }}>Raté !</h2>
+          <p className="text-sm mt-2" style={{ color: CREAM + '60' }}>Le crochet n&apos;a rien attrapé.<br/>Réessayez !</p>
+        </div>
       )}
     </div>
   );

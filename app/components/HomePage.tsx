@@ -76,22 +76,7 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
       accentFrom: '#b45309',
       accentTo: '#ef4444',
     },
-    {
-      href: `${routePrefix}/crane-machine`,
-      title: "Crane Machine",
-      desc: "Attrapez un cadeau avec la pince !",
-      emoji: "🏗️",
-      accentFrom: GOLD_BRIGHT,
-      accentTo: AMBER,
-    },
-    {
-      href: `${routePrefix}/pachinko`,
-      title: "Pachinko",
-      desc: "Guidez la bille avec les flippers",
-      emoji: "🎰",
-      accentFrom: '#8b5cf6',
-      accentTo: GOLD,
-    },
+
   ];
 
   return (

@@ -14,7 +14,13 @@ import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
    ═══════════════════════════════════════════════ */
 
 interface Platform {
-  x: number; y: number; width: number; prize: Prize; hue: number;
+  x: number; y: number; width: number; prize: Prize; hue: number; hit?: boolean;
+}
+interface Debris {
+  x: number; y: number; vx: number; vy: number;
+  rot: number; rotV: number;
+  w: number; h: number; color: string;
+  life: number; maxLife: number;
 }
 interface Particle {
   x: number; y: number; vx: number; vy: number;
@@ -47,6 +53,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   const platformsRef = useRef<Platform[]>([]);
   const sizeRef = useRef({ w: 0, h: 0 });
   const particlesRef = useRef<Particle[]>([]);
+  const debrisRef = useRef<Debris[]>([]);
   const shakeRef = useRef({ amount: 0 });
   const timeRef = useRef(0);
   const touchRef = useRef<{ active: boolean; startX: number; startY: number; startAngle: number; startPower: number }>({
@@ -104,6 +111,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     firedRef.current = false;
     ballRef.current = null;
     particlesRef.current = [];
+    debrisRef.current = [];
     hitRef.current = false;
     timeRef.current = 0;
 
@@ -214,34 +222,36 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(plat.x - pw / 2 + 2, plat.y + 1); ctx.lineTo(plat.x + pw / 2 - 2, plat.y + 1); ctx.stroke();
 
-        // Gift box on platform
-        const bx = plat.x;
-        const by = plat.y - 16;
-        const bs = 22;
-        const hue = plat.hue;
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.beginPath(); ctx.ellipse(bx, plat.y, bs / 2 + 3, 3, 0, 0, Math.PI * 2); ctx.fill();
-        // Box body
-        const bg = ctx.createLinearGradient(bx - bs / 2, by - bs / 2, bx + bs / 2, by + bs / 2);
-        bg.addColorStop(0, `hsl(${hue}, 60%, 55%)`);
-        bg.addColorStop(1, `hsl(${hue}, 60%, 35%)`);
-        ctx.fillStyle = bg;
-        ctx.beginPath(); ctx.roundRect(bx - bs / 2, by - bs / 2, bs, bs, 3); ctx.fill();
-        // Ribbon
-        ctx.strokeStyle = `hsla(${hue}, 40%, 80%, 0.5)`;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(bx, by - bs / 2); ctx.lineTo(bx, by + bs / 2); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(bx - bs / 2, by); ctx.lineTo(bx + bs / 2, by); ctx.stroke();
-        // Bow
-        ctx.fillStyle = `hsl(${hue}, 50%, 70%)`;
-        ctx.beginPath(); ctx.ellipse(bx - 4, by - bs / 2 - 2, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(bx + 4, by - bs / 2 - 2, 5, 3, 0.4, 0, Math.PI * 2); ctx.fill();
-        // Emoji label
-        ctx.font = '13px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(plat.prize.emoji, bx, by + 1);
+        // Gift box on platform (only if not hit)
+        if (!plat.hit) {
+          const bx = plat.x;
+          const by = plat.y - 16;
+          const bs = 22;
+          const hue = plat.hue;
+          // Shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.2)';
+          ctx.beginPath(); ctx.ellipse(bx, plat.y, bs / 2 + 3, 3, 0, 0, Math.PI * 2); ctx.fill();
+          // Box body
+          const bg = ctx.createLinearGradient(bx - bs / 2, by - bs / 2, bx + bs / 2, by + bs / 2);
+          bg.addColorStop(0, `hsl(${hue}, 60%, 55%)`);
+          bg.addColorStop(1, `hsl(${hue}, 60%, 35%)`);
+          ctx.fillStyle = bg;
+          ctx.beginPath(); ctx.roundRect(bx - bs / 2, by - bs / 2, bs, bs, 3); ctx.fill();
+          // Ribbon
+          ctx.strokeStyle = `hsla(${hue}, 40%, 80%, 0.5)`;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(bx, by - bs / 2); ctx.lineTo(bx, by + bs / 2); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(bx - bs / 2, by); ctx.lineTo(bx + bs / 2, by); ctx.stroke();
+          // Bow
+          ctx.fillStyle = `hsl(${hue}, 50%, 70%)`;
+          ctx.beginPath(); ctx.ellipse(bx - 4, by - bs / 2 - 2, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(bx + 4, by - bs / 2 - 2, 5, 3, 0.4, 0, Math.PI * 2); ctx.fill();
+          // Emoji label
+          ctx.font = '13px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(plat.prize.emoji, bx, by + 1);
+        }
       }
 
       // === Cannon ===
@@ -312,7 +322,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         ctx.setLineDash([3, 5]);
         ctx.strokeStyle = `rgba(${goldRgb},0.12)`;
         ctx.lineWidth = 1;
-        const maxPower = 13;
+        const maxPower = 14;
         const pw = power * maxPower;
         let gx = bx, gy = by;
         let gvx = Math.cos(angle) * pw;
@@ -362,12 +372,35 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
             const onY = ball.y + BALL_R >= plat.y && ball.y + BALL_R <= plat.y + 18 && ball.vy > 0;
             if (onX && onY) {
               hitRef.current = true;
+              plat.hit = true;
+              // Spawn debris fragments from the gift box
+              const bx = plat.x;
+              const by = plat.y - 16;
+              const bs = 22;
+              const fragCount = 12;
+              for (let f = 0; f < fragCount; f++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 4;
+                debrisRef.current.push({
+                  x: bx + (Math.random() - 0.5) * bs,
+                  y: by + (Math.random() - 0.5) * bs,
+                  vx: Math.cos(angle) * speed,
+                  vy: Math.sin(angle) * speed - 2,
+                  rot: Math.random() * Math.PI * 2,
+                  rotV: (Math.random() - 0.5) * 0.3,
+                  w: 4 + Math.random() * 8,
+                  h: 4 + Math.random() * 6,
+                  color: f % 3 === 0 ? `hsl(${plat.hue}, 50%, 70%)` : f % 3 === 1 ? `hsl(${plat.hue}, 60%, 45%)` : `hsl(${plat.hue}, 40%, 80%)`,
+                  life: 0, maxLife: 50 + Math.random() * 30,
+                });
+              }
               addParticles(ball.x, ball.y, 'spark', 20, GOLD_BRIGHT);
-              addParticles(ball.x, ball.y, 'spark', 10, `hsl(${plat.hue}, 60%, 60%)`);
-              shakeRef.current.amount = 8;
+              addParticles(bx, by, 'spark', 10, `hsl(${plat.hue}, 60%, 60%)`);
+              addParticles(bx, by, 'smoke', 6, `hsl(${plat.hue}, 30%, 40%)`);
+              shakeRef.current.amount = 10;
               setWonPrize(plat.prize);
               try { getSoundEngine().victory(); } catch {}
-              setTimeout(() => setPhase('victory'), 700);
+              setTimeout(() => setPhase('victory'), 1200);
               break;
             }
           }
@@ -378,8 +411,8 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
           addParticles(Math.min(Math.max(ball.x, 10), w - 10), Math.min(ball.y, h - 45), 'smoke', 10);
           shakeRef.current.amount = 4;
           try { getSoundEngine().miss(); } catch {}
-          setWonPrize(selectRandomPrize(prizes));
-          setTimeout(() => setPhase('victory'), 800);
+          // Missed — no prize, return to ready screen
+          setTimeout(() => setPhase('ready'), 1000);
         }
       }
 
@@ -403,11 +436,31 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       }
       ctx.globalAlpha = 1;
 
-      // Fire button (bottom right)
+      // Debris fragments (broken gift pieces)
+      for (let i = debrisRef.current.length - 1; i >= 0; i--) {
+        const d = debrisRef.current[i];
+        d.life++;
+        if (d.life > d.maxLife) { debrisRef.current.splice(i, 1); continue; }
+        d.vy += 0.12; // gravity
+        d.x += d.vx; d.y += d.vy;
+        d.vx *= 0.99;
+        d.rot += d.rotV;
+        const alpha = 1 - d.life / d.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.rot);
+        ctx.fillStyle = d.color;
+        ctx.fillRect(-d.w / 2, -d.h / 2, d.w, d.h);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+
+      // Fire button (bottom center)
       if (!firedRef.current) {
-        const btnX = w - 45;
+        const btnX = w / 2;
         const btnY = h - 55;
-        const btnR = 24;
+        const btnR = 28;
         const btnGrad = ctx.createRadialGradient(btnX, btnY - 2, 0, btnX, btnY, btnR);
         btnGrad.addColorStop(0, '#ff6633');
         btnGrad.addColorStop(0.7, '#cc3311');
@@ -421,7 +474,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         ctx.font = 'bold 10px system-ui';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('FEU', btnX, btnY + 1);
+        ctx.fillText('TIRER', btnX, btnY + 1);
       }
 
       animRef.current = requestAnimationFrame(loop);
@@ -438,7 +491,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     const { h } = sizeRef.current;
     const cannonBaseX = 48;
     const cannonBaseY = h - 55;
-    const maxPower = 13;
+    const maxPower = 14;
     const pw = powerRef.current * maxPower;
     const angle = angleRef.current;
     const barrelLen = 32;
@@ -461,7 +514,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     const { w, h } = sizeRef.current;
 
     // Check fire button tap
-    const btnX = w - 45;
+    const btnX = w / 2;
     const btnY = h - 55;
     const dx = x - btnX;
     const dy = y - btnY;
@@ -493,6 +546,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     firedRef.current = false;
     ballRef.current = null;
     hitRef.current = false;
+    debrisRef.current = [];
     setPhase('playing');
   };
 
