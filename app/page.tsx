@@ -54,8 +54,10 @@ const GAMES = [
 export default function Home() {
   return (
     <div
-      className="game-container noise-overlay flex flex-col items-center px-6 gap-8 overflow-y-auto py-12"
+      className="noise-overlay flex flex-col items-center px-6 gap-8 overflow-y-auto py-12"
       style={{
+        width: "100%",
+        minHeight: "100dvh",
         background:
           "radial-gradient(ellipse at 50% 20%, #1a1040 0%, #0c0a1a 60%, #050410 100%)",
       }}
