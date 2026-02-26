@@ -5,19 +5,14 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
-   GYRO MAZE — Winston & Camel Edition
+   GYRO MAZE — Themeable
    Random maze generation each game.
    3 exits with different prizes.
    No rigging — pure skill.
    ═══════════════════════════════════════════════ */
-
-const GOLD = '#d4a843';
-const GOLD_BRIGHT = '#e8c36a';
-const AMBER = '#c9842b';
-const CREAM = '#f5e6c8';
-const SIENNA = '#a0522d';
 
 const BALL_RADIUS = 8;
 const GOAL_RADIUS = 12;
@@ -30,8 +25,6 @@ const PHYSICS_SUBSTEPS = 3;
 
 const MAZE_COLS = 7;
 const MAZE_ROWS = 7;
-
-const GOAL_COLORS = [GOLD, '#ef4444', '#3b82f6'];
 
 interface WallSeg { x1: number; y1: number; x2: number; y2: number; }
 interface GoalDef { x: number; y: number; prize: Prize; color: string; }
@@ -181,7 +174,12 @@ function outerWalls(cols: number, rows: number, exits: ExitDef[]): WallSeg[] {
   return segs;
 }
 
-export default function GyroMaze() {
+export default function GyroMaze({ theme }: { theme?: GameTheme }) {
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, TOBACCO, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
+  const creamRgb = hexToRgb(CREAM);
+  const tobaccoRgb = hexToRgb(TOBACCO);
+  const GOAL_COLORS = [GOLD, '#ef4444', '#3b82f6'];
+
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
@@ -420,9 +418,9 @@ export default function GyroMaze() {
 
       /* ── Background ── */
       const bg = ctx.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, H);
-      bg.addColorStop(0, '#1e1209');
-      bg.addColorStop(0.5, '#120b05');
-      bg.addColorStop(1, '#0a0604');
+      bg.addColorStop(0, BG_LIGHT);
+      bg.addColorStop(0.5, BG_MID);
+      bg.addColorStop(1, BG_DARK);
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, W, H);
 
@@ -433,7 +431,7 @@ export default function GyroMaze() {
       ctx.beginPath();
       ctx.roundRect(mazeX - bp, mazeY - bp, mazeSize + bp * 2, mazeSize + bp * 2, 14 * dpr);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(26,15,8,0.6)';
+      ctx.fillStyle = `rgba(${tobaccoRgb},0.6)`;
       ctx.fill();
 
       // Inner dark area
@@ -560,7 +558,7 @@ export default function GyroMaze() {
 
       // Highlight
       ctx.beginPath(); ctx.arc(ball.x - br * 0.25, ball.y - br * 0.3, br * 0.25, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(245,230,200,0.5)';
+      ctx.fillStyle = `rgba(${creamRgb},0.5)`;
       ctx.fill();
 
       /* ── Touch indicator ── */
@@ -583,7 +581,7 @@ export default function GyroMaze() {
       const indX = W / 2;
       const indY = mazeY + mazeSize + 35 * dpr;
       const indR = 18 * dpr;
-      ctx.strokeStyle = 'rgba(245,230,200,0.08)';
+      ctx.strokeStyle = `rgba(${creamRgb},0.08)`;
       ctx.lineWidth = 1.5 * dpr;
       ctx.beginPath(); ctx.arc(indX, indY, indR, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = GOLD;
@@ -608,7 +606,7 @@ export default function GyroMaze() {
   return (
     <div
       className="game-container noise-overlay flex flex-col items-center"
-      style={{ background: 'radial-gradient(ellipse at 50% 20%, #1e1209 0%, #120b05 50%, #0a0604 100%)' }}
+      style={{ background: `radial-gradient(ellipse at 50% 20%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}
     >
       {/* Header */}
       <div className="w-full max-w-[400px] flex flex-col items-center pt-8 pb-2 z-10" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
@@ -646,7 +644,7 @@ export default function GyroMaze() {
 
       {/* Loading */}
       {phase === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: '#0a0604' }}>
+        <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: BG_DARK }}>
           <div className="w-8 h-8 rounded-full border-2" style={{ borderColor: `${GOLD}30`, borderTopColor: GOLD, animation: 'spin 0.8s linear infinite' }} />
         </div>
       )}
@@ -654,7 +652,7 @@ export default function GyroMaze() {
       {/* Ready screen */}
       {phase === 'ready' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1e1209 0%, #120b05 50%, #0a0604 100%)' }} />
+          <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 30%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
           <div className="relative z-10 flex flex-col items-center gap-5 px-8">
             <div className="flex gap-3 text-4xl" style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}>
               <span>🎁</span><span>🎁</span><span>🎁</span>

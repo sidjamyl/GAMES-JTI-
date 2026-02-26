@@ -5,19 +5,14 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 
-/* ═══════════════════════════════════════════════
-   ANGRY BALL — Winston & Camel Edition
+/* ═══════════════════════════════════════════
+   ANGRY BALL — Themeable
    Horizontal slingshot game with cups.
    Proper physics, dynamic layout, visible walls.
    No rigging at all.
-   ═══════════════════════════════════════════════ */
-
-const GOLD = '#d4a843';
-const GOLD_BRIGHT = '#e8c36a';
-const AMBER = '#c9842b';
-const CREAM = '#f5e6c8';
-const SIENNA = '#a0522d';
+   ═══════════════════════════════════════════ */
 
 // Physics constants — tuned for natural feel
 const GRAVITY = 0.35;
@@ -30,7 +25,6 @@ const GAME_ASPECT = 1.9;
 const MAX_ATTEMPTS = 5;
 const RESTITUTION = 0.35;
 
-const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#ef4444'];
 const SLING_ANCHOR = { x: 0.10, y: 0.58 };
 
 interface Cup {
@@ -61,7 +55,7 @@ interface BallState {
 }
 
 /* ── Dynamic layout generation ── */
-function generateLayout(allPrizes: Prize[]): {
+function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   cups: Cup[];
   obstacles: Obstacle[];
   platforms: PlatformDef[];
@@ -92,7 +86,7 @@ function generateLayout(allPrizes: Prize[]): {
     cups.push({
       x, y,
       w, h,
-      color: CUP_COLORS[i % CUP_COLORS.length],
+      color: cupColors[i % cupColors.length],
       prize: selectRandomPrize(allPrizes),
     });
 
@@ -130,7 +124,11 @@ function generateLayout(allPrizes: Prize[]): {
   return { cups, obstacles, platforms };
 }
 
-export default function AngryBall() {
+export default function AngryBall({ theme }: { theme?: GameTheme }) {
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
+  const goldRgb = hexToRgb(GOLD);
+  const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#ef4444'];
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
@@ -231,14 +229,14 @@ export default function AngryBall() {
 
       /* ── Background ── */
       const bg = ctx.createLinearGradient(0, 0, cw, 0);
-      bg.addColorStop(0, '#140c06');
-      bg.addColorStop(0.5, '#0e0905');
-      bg.addColorStop(1, '#0a0604');
+      bg.addColorStop(0, BG_MID);
+      bg.addColorStop(0.5, BG_MID);
+      bg.addColorStop(1, BG_DARK);
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, cw, ch);
 
       /* ── Game area ── */
-      ctx.fillStyle = 'rgba(212,168,67,0.015)';
+      ctx.fillStyle = `rgba(${goldRgb},0.015)`;
       ctx.beginPath();
       ctx.roundRect(g.x, g.y, g.w, g.h, 12 * dpr);
       ctx.fill();
@@ -248,7 +246,7 @@ export default function AngryBall() {
 
       /* ── Ground ── */
       const ground = toGame(0, 0.95);
-      ctx.fillStyle = 'rgba(212,168,67,0.04)';
+      ctx.fillStyle = `rgba(${goldRgb},0.04)`;
       ctx.fillRect(g.x, ground.y, g.w, g.y + g.h - ground.y);
       ctx.strokeStyle = GOLD + '25';
       ctx.lineWidth = 1.5 * dpr;
@@ -642,7 +640,7 @@ export default function AngryBall() {
         if (t.alpha < 0.05) continue;
         ctx.beginPath();
         ctx.arc(t.x, t.y, Math.max(2, br * t.alpha * 0.5), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(212,168,67,${t.alpha * 0.2})`;
+        ctx.fillStyle = `rgba(${goldRgb},${t.alpha * 0.2})`;
         ctx.fill();
       }
 
@@ -717,7 +715,7 @@ export default function AngryBall() {
           const dotAlpha = 1 - i / 15;
           ctx.beginPath();
           ctx.arc(px, py, (3 - i * 0.15) * dpr, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(212,168,67,${dotAlpha})`;
+          ctx.fillStyle = `rgba(${goldRgb},${dotAlpha})`;
           ctx.fill();
         }
         ctx.restore();
@@ -770,7 +768,7 @@ export default function AngryBall() {
   const start = useCallback(() => {
     setupCanvas();
     // Generate a fresh random layout for each game
-    const layout = generateLayout(prizes);
+    const layout = generateLayout(prizes, CUP_COLORS);
     cupsRef.current = layout.cups;
     obstaclesRef.current = layout.obstacles;
     platformsRef.current = layout.platforms;
@@ -862,7 +860,7 @@ export default function AngryBall() {
 
   return (
     <div style={wrapperStyle}>
-      <div className="relative w-full h-full" style={{ background: '#0a0604' }}>
+        <div className="relative w-full h-full" style={{ background: BG_DARK }}>
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full"
@@ -887,7 +885,7 @@ export default function AngryBall() {
         {/* Ready screen */}
         {phase === 'ready' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-            <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 30% 50%, #1e1209 0%, #0e0905 50%, #0a0604 100%)' }} />
+            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 30% 50%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
             <div className="relative z-10 flex flex-col items-center gap-4 px-8">
               <div className="text-6xl" style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}>😡</div>
               <h1 className="text-[28px] font-extrabold tracking-tight text-center"
@@ -915,7 +913,7 @@ export default function AngryBall() {
         )}
 
         {phase === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: '#0a0604' }}>
+          <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: BG_DARK }}>
             <div className="w-8 h-8 border-2 rounded-full" style={{ borderColor: `${GOLD}30`, borderTopColor: GOLD, animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}

@@ -5,18 +5,13 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import { GameTheme, DEFAULT_THEME } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
-   GIFT CATCHER — Winston & Camel Edition
+   GIFT CATCHER — Themeable
    Gifts pop up briefly. Tap ONE to win it.
    Very fast — one tap = instant win of that prize.
-   Miss them all before time runs out = lose.
    ═══════════════════════════════════════════════ */
-
-const GOLD = '#d4a843';
-const GOLD_BRIGHT = '#e8c36a';
-const AMBER = '#c9842b';
-const CREAM = '#f5e6c8';
 
 const GRID_SIZE = 9; // 3×3
 
@@ -36,7 +31,8 @@ interface Hole {
   duration: number;
 }
 
-export default function GiftCatcher() {
+export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY } = { ...DEFAULT_THEME, ...theme };
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
@@ -175,7 +171,7 @@ export default function GiftCatcher() {
     <div
       className="game-container noise-overlay flex flex-col items-center justify-between"
       style={{
-        background: 'radial-gradient(ellipse at 50% 30%, #1e1209 0%, #120b05 50%, #0a0604 100%)',
+        background: `radial-gradient(ellipse at 50% 30%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)`,
         padding: '0 16px',
       }}
     >
@@ -238,7 +234,7 @@ export default function GiftCatcher() {
                 }}
                 className="relative aspect-square rounded-3xl overflow-hidden transition-transform duration-100 active:scale-95"
                 style={{
-                  background: `radial-gradient(circle at 50% 60%, #2a1810, #140c06)`,
+                  background: `radial-gradient(circle at 50% 60%, ${MAHOGANY}, ${BG_MID})`,
                   border: `2px solid ${hole.hasGift && !hole.caught ? GOLD + '50' : GOLD + '08'}`,
                   boxShadow: hole.hasGift && !hole.caught
                     ? `inset 0 -8px 20px rgba(0,0,0,0.5), 0 0 24px ${GOLD}30`

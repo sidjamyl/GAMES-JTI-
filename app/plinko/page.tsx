@@ -5,10 +5,11 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
-   PLINKO — Winston & Camel Edition
-   Premium gold aesthetic, no rigging.
+   PLINKO — Themeable
+   Premium aesthetic, no rigging.
    Slots show prize emojis at the bottom.
    ═══════════════════════════════════════════════ */
 
@@ -20,15 +21,6 @@ const GRAVITY = 0.25;
 const BOUNCE_DAMPING = 0.55;
 const HORIZONTAL_DAMPING = 0.96;
 const SLOT_COUNT = PEG_COLS + 1;
-
-// Winston/Camel palette
-const GOLD = '#d4a843';
-const GOLD_BRIGHT = '#e8c36a';
-const AMBER = '#c9842b';
-const CREAM = '#f5e6c8';
-const TOBACCO = '#1a0f08';
-const MAHOGANY = '#2a1810';
-const SIENNA = '#a0522d';
 
 interface Ball {
   x: number;
@@ -44,7 +36,14 @@ interface Peg {
   hitAge: number;
 }
 
-export default function Plinko() {
+export default function Plinko({ theme }: { theme?: GameTheme }) {
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, TOBACCO, MAHOGANY, SIENNA, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
+  const goldRgb = hexToRgb(GOLD);
+  const amberRgb = hexToRgb(AMBER);
+  const siennaRgb = hexToRgb(SIENNA);
+  const creamRgb = hexToRgb(CREAM);
+  const mahoganyRgb = hexToRgb(MAHOGANY);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<GamePhase>('loading');
   const phaseRef = useRef<GamePhase>('loading');
@@ -168,9 +167,9 @@ export default function Plinko() {
 
       // ── Background: deep tobacco gradient
       const bgGrad = ctx.createRadialGradient(w / 2, h * 0.3, 0, w / 2, h * 0.3, h);
-      bgGrad.addColorStop(0, '#1e1209');
-      bgGrad.addColorStop(0.5, '#120b05');
-      bgGrad.addColorStop(1, '#0a0604');
+      bgGrad.addColorStop(0, BG_LIGHT);
+      bgGrad.addColorStop(0.5, BG_MID);
+      bgGrad.addColorStop(1, BG_DARK);
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, w, h);
 
@@ -196,7 +195,7 @@ export default function Plinko() {
       ctx.beginPath();
       ctx.roundRect(fx, fy, fw, fh, 16);
       ctx.stroke();
-      ctx.fillStyle = 'rgba(212,168,67,0.02)';
+      ctx.fillStyle = `rgba(${goldRgb},0.02)`;
       ctx.fill();
 
       // ── Gold corner accents
@@ -224,7 +223,7 @@ export default function Plinko() {
         // Hit glow
         if (glowAlpha > 0) {
           const glow = ctx.createRadialGradient(peg.x, peg.y, 0, peg.x, peg.y, PEG_RADIUS * 4);
-          glow.addColorStop(0, `rgba(212,168,67,${glowAlpha * 0.4})`);
+          glow.addColorStop(0, `rgba(${goldRgb},${glowAlpha * 0.4})`);
           glow.addColorStop(1, 'transparent');
           ctx.fillStyle = glow;
           ctx.beginPath();
@@ -242,9 +241,9 @@ export default function Plinko() {
           pegGrad.addColorStop(0.5, GOLD);
           pegGrad.addColorStop(1, AMBER);
         } else {
-          pegGrad.addColorStop(0, 'rgba(212,168,67,0.7)');
-          pegGrad.addColorStop(0.5, 'rgba(201,132,43,0.5)');
-          pegGrad.addColorStop(1, 'rgba(160,82,45,0.3)');
+          pegGrad.addColorStop(0, `rgba(${goldRgb},0.7)`);
+          pegGrad.addColorStop(0.5, `rgba(${amberRgb},0.5)`);
+          pegGrad.addColorStop(1, `rgba(${siennaRgb},0.3)`);
         }
         ctx.beginPath();
         ctx.arc(peg.x, peg.y, PEG_RADIUS, 0, Math.PI * 2);
@@ -254,7 +253,7 @@ export default function Plinko() {
         // Highlight dot
         ctx.beginPath();
         ctx.arc(peg.x - 1, peg.y - 1, PEG_RADIUS * 0.3, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(245,230,200,${glowAlpha > 0 ? 0.8 : 0.3})`;
+        ctx.fillStyle = `rgba(${creamRgb},${glowAlpha > 0 ? 0.8 : 0.3})`;
         ctx.fill();
       }
 
@@ -267,13 +266,13 @@ export default function Plinko() {
 
         // Slot background
         const slotGrad = ctx.createLinearGradient(sx, g.slotY, sx, g.slotY + 44);
-        slotGrad.addColorStop(0, 'rgba(212,168,67,0.06)');
-        slotGrad.addColorStop(1, 'rgba(42,24,16,0.4)');
+        slotGrad.addColorStop(0, `rgba(${goldRgb},0.06)`);
+        slotGrad.addColorStop(1, `rgba(${mahoganyRgb},0.4)`);
         ctx.fillStyle = slotGrad;
         ctx.beginPath();
         ctx.roundRect(sx + 2, g.slotY, slotW - 4, 44, 8);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(212,168,67,0.15)';
+        ctx.strokeStyle = `rgba(${goldRgb},0.15)`;
         ctx.lineWidth = 1;
         ctx.stroke();
 
@@ -353,7 +352,7 @@ export default function Plinko() {
           const r = BALL_RADIUS * (1 - t.age / 20) * 0.5;
           ctx.beginPath();
           ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(212,168,67,${alpha})`;
+          ctx.fillStyle = `rgba(${goldRgb},${alpha})`;
           ctx.fill();
         }
 
@@ -361,7 +360,7 @@ export default function Plinko() {
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, BALL_RADIUS * 2.5, 0, Math.PI * 2);
         const ballGlow = ctx.createRadialGradient(ball.x, ball.y, BALL_RADIUS * 0.5, ball.x, ball.y, BALL_RADIUS * 2.5);
-        ballGlow.addColorStop(0, 'rgba(212,168,67,0.12)');
+        ballGlow.addColorStop(0, `rgba(${goldRgb},0.12)`);
         ballGlow.addColorStop(1, 'transparent');
         ctx.fillStyle = ballGlow;
         ctx.fill();
@@ -371,7 +370,7 @@ export default function Plinko() {
           ball.x - 3, ball.y - 3, 0,
           ball.x, ball.y, BALL_RADIUS,
         );
-        ballGrad.addColorStop(0, '#f5e6c8');
+        ballGrad.addColorStop(0, CREAM);
         ballGrad.addColorStop(0.3, GOLD_BRIGHT);
         ballGrad.addColorStop(0.6, GOLD);
         ballGrad.addColorStop(1, SIENNA);
@@ -383,7 +382,7 @@ export default function Plinko() {
         // Ball highlight
         ctx.beginPath();
         ctx.arc(ball.x - 2.5, ball.y - 2.5, BALL_RADIUS * 0.3, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(245,230,200,0.7)';
+        ctx.fillStyle = `rgba(${creamRgb},0.7)`;
         ctx.fill();
 
         // Shadow
@@ -415,9 +414,9 @@ export default function Plinko() {
 
       // ── Drop zone indicator
       if (canDrop && phaseRef.current === 'playing') {
-        ctx.fillStyle = 'rgba(212,168,67,0.04)';
+        ctx.fillStyle = `rgba(${goldRgb},0.04)`;
         ctx.fillRect(g.boardLeft, 0, w - g.boardLeft * 2, 46);
-        ctx.strokeStyle = 'rgba(212,168,67,0.12)';
+        ctx.strokeStyle = `rgba(${goldRgb},0.12)`;
         ctx.setLineDash([6, 4]);
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -474,7 +473,7 @@ export default function Plinko() {
   return (
     <div
       className="game-container noise-overlay flex flex-col items-center justify-center"
-      style={{ background: '#0a0604' }}
+      style={{ background: BG_DARK }}
     >
       {phase === 'playing' && (
         <canvas
@@ -551,7 +550,7 @@ export default function Plinko() {
       )}
 
       {phase === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: '#0a0604' }}>
+        <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: BG_DARK }}>
           <div
             className="w-8 h-8 border-2 rounded-full"
             style={{ borderColor: `${GOLD}30`, borderTopColor: GOLD, animation: 'spin 0.8s linear infinite' }}
