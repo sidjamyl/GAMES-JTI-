@@ -33,12 +33,28 @@ const GAMES = [
     accentFrom: "#f59e0b",
     accentTo: "#dc2626",
   },
+  {
+    href: "/gyro-maze",
+    title: "Gyro Maze",
+    desc: "Inclinez pour guider la bille dans le labyrinthe",
+    emoji: "🏁",
+    accentFrom: "#10b981",
+    accentTo: "#06b6d4",
+  },
+  {
+    href: "/precision-shot",
+    title: "Tir de Précision",
+    desc: "Visez la cible mouvante au bon moment",
+    emoji: "🎯",
+    accentFrom: "#ef4444",
+    accentTo: "#f59e0b",
+  },
 ];
 
 export default function Home() {
   return (
     <div
-      className="game-container noise-overlay flex flex-col items-center justify-center px-6 gap-10"
+      className="game-container noise-overlay flex flex-col items-center px-6 gap-8 overflow-y-auto py-12"
       style={{
         background:
           "radial-gradient(ellipse at 50% 20%, #1a1040 0%, #0c0a1a 60%, #050410 100%)",
