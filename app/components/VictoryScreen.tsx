@@ -16,8 +16,8 @@ interface Props {
 export default function VictoryScreen({
   prize,
   onClose,
-  accentFrom = '#a855f7',
-  accentTo = '#ec4899',
+  accentFrom = '#d4a843',
+  accentTo = '#c9842b',
 }: Props) {
   const [visible, setVisible] = useState(false);
 
