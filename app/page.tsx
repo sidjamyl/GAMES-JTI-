@@ -1,65 +1,105 @@
-import Image from "next/image";
+import Link from "next/link";
+
+const GAMES = [
+  {
+    href: "/swipe-shoot",
+    title: "Swipe & Shoot",
+    desc: "Lancez la bille dans le bon slot",
+    emoji: "🎯",
+    accentFrom: "#3b82f6",
+    accentTo: "#8b5cf6",
+  },
+  {
+    href: "/demineur",
+    title: "La Matrice",
+    desc: "Choisissez la bonne case",
+    emoji: "💎",
+    accentFrom: "#8b5cf6",
+    accentTo: "#06b6d4",
+  },
+  {
+    href: "/plinko",
+    title: "Plinko",
+    desc: "Lâchez la bille et gagnez",
+    emoji: "🔮",
+    accentFrom: "#f59e0b",
+    accentTo: "#ef4444",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div
+      className="game-container noise-overlay flex flex-col items-center justify-center px-6 gap-10"
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 20%, #1a1040 0%, #0c0a1a 60%, #050410 100%)",
+      }}
+    >
+      <div className="text-center" style={{ animation: "fadeInUp 0.5s ease-out both" }}>
+        <h1 className="text-[32px] font-extrabold text-white tracking-tight mb-2">
+          Mini-Jeux
+        </h1>
+        <p className="text-white/35 text-sm">
+          Choisissez un jeu et tentez de gagner un cadeau
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-4 w-full max-w-[340px]">
+        {GAMES.map((game, i) => (
+          <Link
+            key={game.href}
+            href={game.href}
+            className="group relative flex items-center gap-5 p-5 rounded-2xl transition-all duration-200 active:scale-[0.97]"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              animation: `fadeInUp 0.5s ease-out ${0.15 + i * 0.1}s both`,
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            {/* Hover/active glow */}
+            <div
+              className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background: `linear-gradient(135deg, ${game.accentFrom}10, ${game.accentTo}10)`,
+                border: `1px solid ${game.accentFrom}20`,
+                borderRadius: "1rem",
+              }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+            <div
+              className="relative flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center text-2xl"
+              style={{
+                background: `linear-gradient(135deg, ${game.accentFrom}15, ${game.accentTo}15)`,
+                border: `1px solid ${game.accentFrom}25`,
+              }}
+            >
+              {game.emoji}
+            </div>
+
+            <div className="relative flex-1 min-w-0">
+              <h2 className="text-white font-bold text-[16px] tracking-tight">
+                {game.title}
+              </h2>
+              <p className="text-white/35 text-[13px] mt-0.5">{game.desc}</p>
+            </div>
+
+            <svg
+              className="relative w-5 h-5 text-white/20 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
