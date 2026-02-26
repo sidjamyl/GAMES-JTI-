@@ -14,10 +14,10 @@ import VictoryScreen from '../components/VictoryScreen';
 const GRID_SIZE = 9; // 3x3 grid
 const GAME_DURATION = 15; // seconds
 const REQUIRED_HITS = 8; // hits to win (rigged: always reachable)
-const MOLE_SHOW_MIN = 600; // ms minimum mole visible time
-const MOLE_SHOW_MAX = 1200; // ms maximum mole visible time
-const SPAWN_INTERVAL_START = 900; // ms between spawns at start
-const SPAWN_INTERVAL_END = 500; // ms between spawns near end (speeds up)
+const MOLE_SHOW_MIN = 400; // ms minimum mole visible time
+const MOLE_SHOW_MAX = 750; // ms maximum mole visible time
+const SPAWN_INTERVAL_START = 550; // ms between spawns at start
+const SPAWN_INTERVAL_END = 250; // ms between spawns near end (speeds up)
 
 const MOLE_EMOJI = '🐹';
 const WHACK_EMOJI = '💥';
@@ -142,8 +142,8 @@ export default function WhacAMole() {
     const elapsed = GAME_DURATION - timeLeftRef.current;
     const progress = Math.min(elapsed / GAME_DURATION, 1);
     const interval = SPAWN_INTERVAL_START - (SPAWN_INTERVAL_START - SPAWN_INTERVAL_END) * progress;
-    // Sometimes spawn 2 moles at once for excitement
-    const extraSpawn = progress > 0.5 && Math.random() < 0.3;
+    // Often spawn 2+ moles at once for intensity
+    const extraSpawn = progress > 0.3 && Math.random() < 0.5;
 
     spawnRef.current = setTimeout(() => {
       spawnMole();
