@@ -19,16 +19,11 @@ const AMBER = '#c9842b';
 const CREAM = '#f5e6c8';
 
 const GRID_SIZE = 9; // 3×3
-const GAME_DURATION = 10; // seconds — short and intense
 
-// Gifts appear VERY briefly and get faster over time
-const GIFT_SHOW_MIN = 220;  // ms minimum visible time
-const GIFT_SHOW_MAX = 420;  // ms maximum visible time
-const SPAWN_INTERVAL_START = 480; // ms between spawns at start
-const SPAWN_INTERVAL_END = 180;   // ms near end
-// Late game: show times shrink further
-const LATE_GIFT_SHOW_MIN = 130;
-const LATE_GIFT_SHOW_MAX = 260;
+// Gifts appear VERY briefly — constant fast speed, no time limit
+const GIFT_SHOW_MIN = 150;  // ms minimum visible time
+const GIFT_SHOW_MAX = 320;  // ms maximum visible time
+const SPAWN_INTERVAL = 250; // ms between spawns (constant)
 
 const CATCH_EMOJI = '✨';
 
@@ -46,16 +41,13 @@ export default function GiftCatcher() {
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
   const [holes, setHoles] = useState<Hole[]>([]);
-  const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [gameOver, setGameOver] = useState(false);
   const [catchEffect, setCatchEffect] = useState<{ x: number; y: number; key: number } | null>(null);
 
   const phaseRef = useRef<GamePhase>('loading');
   const holesRef = useRef<Hole[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const spawnRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const giftTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-  const timeLeftRef = useRef(GAME_DURATION);
   const effectKeyRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -69,7 +61,6 @@ export default function GiftCatcher() {
   }, []);
 
   const clearAllTimers = useCallback(() => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (spawnRef.current) { clearTimeout(spawnRef.current); spawnRef.current = null; }
     giftTimersRef.current.forEach((t) => clearTimeout(t));
     giftTimersRef.current.clear();
@@ -98,12 +89,8 @@ export default function GiftCatcher() {
     // Choose a random prize for this specific gift
     const prize = selectRandomPrize(prizes);
 
-    // Gift show duration — gets shorter over time
-    const elapsed = GAME_DURATION - timeLeftRef.current;
-    const progress = Math.min(elapsed / GAME_DURATION, 1);
-    const showMin = GIFT_SHOW_MIN + (LATE_GIFT_SHOW_MIN - GIFT_SHOW_MIN) * progress;
-    const showMax = GIFT_SHOW_MAX + (LATE_GIFT_SHOW_MAX - GIFT_SHOW_MAX) * progress;
-    const duration = showMin + Math.random() * (showMax - showMin);
+    // Constant fast show duration
+    const duration = GIFT_SHOW_MIN + Math.random() * (GIFT_SHOW_MAX - GIFT_SHOW_MIN);
 
     setHoles((prev) => {
       const next = prev.map((h) =>
@@ -119,12 +106,10 @@ export default function GiftCatcher() {
     }, duration);
     giftTimersRef.current.set(target.id, hideTimer);
 
-    // Schedule next spawn
-    const interval = SPAWN_INTERVAL_START - (SPAWN_INTERVAL_START - SPAWN_INTERVAL_END) * progress;
-
+    // Schedule next spawn — constant fast pace
     spawnRef.current = setTimeout(() => {
       spawnGift();
-    }, interval + Math.random() * 150);
+    }, SPAWN_INTERVAL + Math.random() * 100);
   }, [hideGift, prizes]);
 
   const catchGift = useCallback(
@@ -175,32 +160,16 @@ export default function GiftCatcher() {
     const newHoles = initHoles();
     setHoles(newHoles);
     holesRef.current = newHoles;
-    setTimeLeft(GAME_DURATION);
-    timeLeftRef.current = GAME_DURATION;
     setWonPrize(null);
     setCatchEffect(null);
     setGameOver(false);
     setPhase('playing');
 
-    // Countdown
-    timerRef.current = setInterval(() => {
-      timeLeftRef.current -= 1;
-      setTimeLeft(timeLeftRef.current);
-      if (timeLeftRef.current <= 0) {
-        clearAllTimers();
-        // Time's up — lost
-        setGameOver(true);
-        setPhase('ready');
-      }
-    }, 1000);
-
-    // Start spawning gifts after a short delay
-    setTimeout(() => spawnGift(), 500);
-  }, [initHoles, clearAllTimers, spawnGift]);
+    // Start spawning gifts immediately
+    setTimeout(() => spawnGift(), 300);
+  }, [initHoles, spawnGift]);
 
   useEffect(() => { return () => clearAllTimers(); }, [clearAllTimers]);
-
-  const timePct = (timeLeft / GAME_DURATION) * 100;
 
   return (
     <div
@@ -218,33 +187,6 @@ export default function GiftCatcher() {
         </h1>
         <p style={{ color: CREAM + '40' }} className="text-xs mt-1">Attrapez un cadeau avant qu&apos;il disparaisse !</p>
       </div>
-
-      {/* Timer */}
-      {phase === 'playing' && (
-        <div className="w-full max-w-[380px] flex flex-col gap-2 px-2" style={{ animation: 'fadeIn 0.3s ease-out both', zIndex: 10 }}>
-          <div className="flex items-center justify-center">
-            <div className="flex items-center gap-2">
-              <span style={{ color: CREAM + '60' }} className="text-xs font-semibold uppercase tracking-wider">Temps</span>
-              <span className="text-xl font-extrabold tabular-nums"
-                style={{ color: timeLeft <= 4 ? '#ef4444' : CREAM + 'cc', animation: timeLeft <= 4 ? 'subtlePulse 0.5s ease-in-out infinite' : undefined }}>
-                {timeLeft}s
-              </span>
-            </div>
-          </div>
-
-          {/* Time bar */}
-          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(245,230,200,0.06)' }}>
-            <div className="h-full rounded-full transition-all duration-1000 linear"
-              style={{
-                width: `${timePct}%`,
-                background: timeLeft <= 4
-                  ? 'linear-gradient(90deg, #ef4444, #f97316)'
-                  : `linear-gradient(90deg, ${GOLD}, ${AMBER})`,
-                boxShadow: `0 0 8px ${timeLeft <= 4 ? '#ef4444' : GOLD}40`,
-              }} />
-          </div>
-        </div>
-      )}
 
       {/* Game Grid */}
       <div className="flex-1 flex items-center justify-center w-full max-w-[380px]" style={{ zIndex: 10 }}>
