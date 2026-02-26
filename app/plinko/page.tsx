@@ -10,17 +10,18 @@ import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 /* ═══════════════════════════════════════════════
    PLINKO — Themeable
    Premium aesthetic, no rigging.
-   Slots show prize emojis at the bottom.
+   Adaptive peg density + gyroscope tilt.
    ═══════════════════════════════════════════════ */
 
-const PEG_ROWS = 10;
-const PEG_COLS = 9;
+// Base peg grid for ~375px width (phone). Scales up for larger screens.
+const BASE_PEG_ROWS = 10;
+const BASE_PEG_COLS = 9;
 const PEG_RADIUS = 4;
 const BALL_RADIUS = 9;
 const GRAVITY = 0.25;
 const BOUNCE_DAMPING = 0.55;
 const HORIZONTAL_DAMPING = 0.96;
-const SLOT_COUNT = PEG_COLS + 1;
+const GYRO_STRENGTH = 0.08; // how much tilt affects the ball
 
 interface Ball {
   x: number;
@@ -56,6 +57,9 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
   const slotPrizesRef = useRef<Prize[]>([]);
   const animRef = useRef<number>(0);
   const dprRef = useRef(1);
+  const tiltRef = useRef(0); // -1..1 horizontal tilt
+  const calibrationRef = useRef({ gamma: 0, calibrated: false });
+  const gridRef = useRef({ pegRows: BASE_PEG_ROWS, pegCols: BASE_PEG_COLS, slotCount: BASE_PEG_COLS + 1 });
 
   const geoRef = useRef({
     pegSpacingX: 0,
@@ -75,22 +79,33 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
   }, []);
 
   const computeGeometry = useCallback((w: number, h: number) => {
-    const boardPadding = w * 0.08;
+    // Adapt peg density to screen size:
+    // Phone (~375px) = base 9 cols / 10 rows
+    // Tablet (~768px) = ~14 cols / 14 rows
+    // Desktop (~1200px+) = ~18 cols / 16 rows
+    // Target: peg horizontal spacing ~38-42px so ball always bounces
+    const TARGET_SPACING = 40;
+    const boardPadding = PEG_RADIUS + 4; // minimal edge margin so pegs fill full width
     const boardWidth = w - boardPadding * 2;
     const boardTop = h * 0.12;
     const boardBottom = h * 0.78;
     const boardHeight = boardBottom - boardTop;
 
-    const pegSpacingX = boardWidth / (PEG_COLS - 1);
-    const pegSpacingY = boardHeight / (PEG_ROWS - 1);
-    const slotWidth = boardWidth / SLOT_COUNT;
+    const pegCols = Math.max(BASE_PEG_COLS, Math.round(boardWidth / TARGET_SPACING));
+    const pegRows = Math.max(BASE_PEG_ROWS, Math.round(boardHeight / TARGET_SPACING));
+    const slotCount = pegCols + 1;
+    gridRef.current = { pegRows, pegCols, slotCount };
+
+    const pegSpacingX = boardWidth / (pegCols - 1);
+    const pegSpacingY = boardHeight / (pegRows - 1);
+    const slotWidth = boardWidth / slotCount;
     const slotY = boardBottom + 16;
 
     geoRef.current = { pegSpacingX, pegSpacingY, boardTop, boardLeft: boardPadding, slotWidth, slotY, w, h };
 
     const pegs: Peg[] = [];
-    for (let row = 0; row < PEG_ROWS; row++) {
-      const cols = row % 2 === 0 ? PEG_COLS : PEG_COLS - 1;
+    for (let row = 0; row < pegRows; row++) {
+      const cols = row % 2 === 0 ? pegCols : pegCols - 1;
       const offset = row % 2 === 0 ? 0 : pegSpacingX / 2;
       for (let col = 0; col < cols; col++) {
         pegs.push({
@@ -114,14 +129,77 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     computeGeometry(rect.width, rect.height);
   }, [computeGeometry]);
 
-  const assignSlotPrizes = useCallback(() => {
-    const assigned: Prize[] = [];
-    for (let i = 0; i < SLOT_COUNT; i++) {
-      assigned.push(selectRandomPrize(prizes));
+  // ── Gyroscope tilt (phone only — subtle horizontal nudge)
+  useEffect(() => {
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      const gamma = e.gamma ?? 0; // left/right tilt in degrees
+      if (!calibrationRef.current.calibrated) {
+        calibrationRef.current = { gamma, calibrated: true };
+      }
+      const adjusted = gamma - calibrationRef.current.gamma;
+      // Map ±30° to ±1
+      tiltRef.current = Math.max(-1, Math.min(1, adjusted / 30));
+    };
+
+    // iOS 13+ requires explicit permission
+    const requestAndListen = async () => {
+      if (
+        typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
+      ) {
+        try {
+          const perm = await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission();
+          if (perm !== 'granted') return;
+        } catch {
+          return;
+        }
+      }
+      window.addEventListener('deviceorientation', handleOrientation);
+    };
+
+    requestAndListen();
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+    };
+  }, []);
+
+  // Fill N slots proportionally to each prize's quantity, then shuffle
+  const buildProportionalSlots = useCallback((count: number): Prize[] => {
+    const available = prizes.filter((p) => p.quantity > 0);
+    if (available.length === 0) return Array(count).fill(prizes[0]);
+    const totalQty = available.reduce((s, p) => s + p.quantity, 0);
+
+    // Distribute slots proportionally (largest remainder method)
+    const raw = available.map((p) => ({ prize: p, exact: (p.quantity / totalQty) * count }));
+    let assigned: Prize[] = [];
+    let remaining = count;
+    for (const r of raw) {
+      const n = Math.floor(r.exact);
+      for (let i = 0; i < n; i++) assigned.push(r.prize);
+      remaining -= n;
     }
+    // Fill remainder by largest fractional part
+    const fracs = raw.map((r, i) => ({ i, frac: r.exact - Math.floor(r.exact), prize: r.prize }));
+    fracs.sort((a, b) => b.frac - a.frac);
+    for (let i = 0; i < remaining; i++) {
+      assigned.push(fracs[i % fracs.length].prize);
+    }
+
+    // Fisher-Yates shuffle
+    for (let i = assigned.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [assigned[i], assigned[j]] = [assigned[j], assigned[i]];
+    }
+    return assigned;
+  }, [prizes]);
+
+  const assignSlotPrizes = useCallback(() => {
+    const { slotCount } = gridRef.current;
+    const assigned = buildProportionalSlots(slotCount);
     setSlotPrizes(assigned);
     slotPrizesRef.current = assigned;
-  }, [prizes]);
+  }, [buildProportionalSlots]);
 
   const dropBall = useCallback(
     (tapX: number) => {
@@ -129,8 +207,8 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       setCanDrop(false);
 
       const g = geoRef.current;
-      const minX = g.boardLeft + BALL_RADIUS;
-      const maxX = g.w - g.boardLeft - BALL_RADIUS;
+      const minX = BALL_RADIUS;
+      const maxX = g.w - BALL_RADIUS;
       const startX = Math.max(minX, Math.min(maxX, tapX));
 
       ballRef.current = {
@@ -152,6 +230,13 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
 
     resize();
     window.addEventListener('resize', resize);
+
+    // Reassign slot prizes now that geometry is computed (canvas may have different slotCount)
+    if (slotPrizesRef.current.length !== gridRef.current.slotCount) {
+      const assigned = buildProportionalSlots(gridRef.current.slotCount);
+      setSlotPrizes(assigned);
+      slotPrizesRef.current = assigned;
+    }
 
     const loop = () => {
       const ctx = canvas.getContext('2d');
@@ -186,9 +271,9 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       ctx.globalAlpha = 1;
 
       // ── Board frame with gold border
-      const fx = g.boardLeft - 8;
+      const fx = 4;
       const fy = g.boardTop - 12;
-      const fw = w - g.boardLeft * 2 + 16;
+      const fw = w - 8;
       const fh = g.slotY + 50 - g.boardTop + 12;
       ctx.strokeStyle = GOLD + '25';
       ctx.lineWidth = 2;
@@ -257,11 +342,12 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
         ctx.fill();
       }
 
-      // ── Prize slots at bottom
-      const slotW = (w - g.boardLeft * 2) / SLOT_COUNT;
+      // ── Prize slots at bottom (full width, edge to edge)
+      const { slotCount } = gridRef.current;
+      const slotW = w / slotCount; // full canvas width, no padding
       const sp = slotPrizesRef.current;
-      for (let s = 0; s < SLOT_COUNT; s++) {
-        const sx = g.boardLeft + s * slotW;
+      for (let s = 0; s < slotCount; s++) {
+        const sx = s * slotW;
         const prize = sp[s];
 
         // Slot background
@@ -270,30 +356,37 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
         slotGrad.addColorStop(1, `rgba(${mahoganyRgb},0.4)`);
         ctx.fillStyle = slotGrad;
         ctx.beginPath();
-        ctx.roundRect(sx + 2, g.slotY, slotW - 4, 44, 8);
+        ctx.roundRect(sx + 1, g.slotY, slotW - 2, 44, 6);
         ctx.fill();
         ctx.strokeStyle = `rgba(${goldRgb},0.15)`;
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Prize emoji
+        // Prize emoji (scales with slot width)
         if (prize) {
-          ctx.font = `${Math.min(18, slotW * 0.45)}px serif`;
+          const emojiSize = Math.max(10, Math.min(18, slotW * 0.45));
+          ctx.font = `${emojiSize}px serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(prize.emoji, sx + slotW / 2, g.slotY + 16);
 
-          // Prize name (truncated)
-          ctx.fillStyle = CREAM + '60';
-          ctx.font = `bold ${Math.min(7, slotW * 0.18)}px system-ui`;
-          const name = prize.name.length > 8 ? prize.name.substring(0, 7) + '…' : prize.name;
-          ctx.fillText(name, sx + slotW / 2, g.slotY + 34);
+          // Prize name (truncated, only if slot wide enough)
+          if (slotW > 28) {
+            ctx.fillStyle = CREAM + '60';
+            const nameSize = Math.max(5, Math.min(7, slotW * 0.16));
+            ctx.font = `bold ${nameSize}px system-ui`;
+            const maxChars = Math.max(3, Math.floor(slotW / 6));
+            const name = prize.name.length > maxChars ? prize.name.substring(0, maxChars - 1) + '…' : prize.name;
+            ctx.fillText(name, sx + slotW / 2, g.slotY + 34);
+          }
         }
       }
 
       // ── Ball physics & render (NO rigging)
       const ball = ballRef.current;
       if (ball) {
+        // Apply gyroscope tilt as gentle horizontal nudge
+        ball.vx += tiltRef.current * GYRO_STRENGTH;
         ball.vy += GRAVITY;
         ball.vx *= HORIZONTAL_DAMPING;
         ball.x += ball.vx;
@@ -331,13 +424,13 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
           }
         }
 
-        // Wall bounce
-        if (ball.x < g.boardLeft + BALL_RADIUS) {
-          ball.x = g.boardLeft + BALL_RADIUS;
+        // Wall bounce (edge of canvas)
+        if (ball.x < BALL_RADIUS) {
+          ball.x = BALL_RADIUS;
           ball.vx = Math.abs(ball.vx) * 0.5;
         }
-        if (ball.x > w - g.boardLeft - BALL_RADIUS) {
-          ball.x = w - g.boardLeft - BALL_RADIUS;
+        if (ball.x > w - BALL_RADIUS) {
+          ball.x = w - BALL_RADIUS;
           ball.vx = -Math.abs(ball.vx) * 0.5;
         }
 
@@ -393,10 +486,8 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
 
         // Check if ball reached slot zone
         if (ball.y > g.slotY + 8) {
-          const relX = ball.x - g.boardLeft;
-          const slotBoardW = w - g.boardLeft * 2;
-          let slotIndex = Math.floor((relX / slotBoardW) * SLOT_COUNT);
-          slotIndex = Math.max(0, Math.min(SLOT_COUNT - 1, slotIndex));
+          let slotIndex = Math.floor((ball.x / w) * slotCount);
+          slotIndex = Math.max(0, Math.min(slotCount - 1, slotIndex));
 
           const prize = slotPrizesRef.current[slotIndex];
           if (prize) {
@@ -415,13 +506,13 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       // ── Drop zone indicator
       if (canDrop && phaseRef.current === 'playing') {
         ctx.fillStyle = `rgba(${goldRgb},0.04)`;
-        ctx.fillRect(g.boardLeft, 0, w - g.boardLeft * 2, 46);
+        ctx.fillRect(0, 0, w, 46);
         ctx.strokeStyle = `rgba(${goldRgb},0.12)`;
         ctx.setLineDash([6, 4]);
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(g.boardLeft, 46);
-        ctx.lineTo(w - g.boardLeft, 46);
+        ctx.moveTo(0, 46);
+        ctx.lineTo(w, 46);
         ctx.stroke();
         ctx.setLineDash([]);
 
@@ -440,6 +531,20 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
         ctx.fill();
       }
 
+      // ── Tilt indicator (bottom center, only when ball is active)
+      if (ballRef.current && Math.abs(tiltRef.current) > 0.02) {
+        const indX = w / 2;
+        const indY = h - 18;
+        const indR = 16;
+        ctx.strokeStyle = `rgba(${goldRgb},0.08)`;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(indX, indY, indR, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.arc(indX + tiltRef.current * indR * 0.8, indY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       animRef.current = requestAnimationFrame(loop);
     };
 
@@ -449,7 +554,7 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       cancelAnimationFrame(animRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, [phase, canDrop, resize]);
+  }, [phase, canDrop, resize, buildProportionalSlots]);
 
   const handleCanvasInteraction = (e: React.TouchEvent | React.MouseEvent) => {
     if (phaseRef.current !== 'playing' || !canDrop) return;
@@ -465,6 +570,8 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     setCanDrop(true);
     setWonPrize(null);
     ballRef.current = null;
+    tiltRef.current = 0;
+    calibrationRef.current = { gamma: 0, calibrated: false };
     pegsRef.current.forEach((p) => (p.hitAge = -1));
     assignSlotPrizes();
     setPhase('playing');

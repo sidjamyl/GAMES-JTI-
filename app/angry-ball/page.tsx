@@ -54,7 +54,7 @@ interface BallState {
   stillFrames: number;
 }
 
-/* ── Dynamic layout generation ── */
+/* ── Dense grid layout generation ── */
 function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   cups: Cup[];
   obstacles: Obstacle[];
@@ -64,60 +64,72 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const platforms: PlatformDef[] = [];
   const obstacles: Obstacle[] = [];
 
-  // Zone-based placement prevents overlap while keeping variety
-  const zones = [
-    { xMin: 0.44, xMax: 0.56, yMin: 0.68, yMax: 0.82 },
-    { xMin: 0.56, xMax: 0.72, yMin: 0.46, yMax: 0.60 },
-    { xMin: 0.72, xMax: 0.87, yMin: 0.66, yMax: 0.80 },
-    { xMin: 0.82, xMax: 0.94, yMin: 0.38, yMax: 0.52 },
-    { xMin: 0.60, xMax: 0.78, yMin: 0.26, yMax: 0.40 },
-  ];
+  // Dense grid layout — 3 columns x 3 rows covering the right side
+  // This ensures almost no empty space, forcing precision
+  const cols = 3;
+  const rows = 3;
+  const cupW = 0.072;
+  const cupH = 0.085;
+  const startX = 0.42;
+  const endX = 0.93;
+  const startY = 0.22;
+  const endY = 0.82;
+  const spacingX = (endX - startX) / (cols - 1);
+  const spacingY = (endY - startY) / (rows - 1);
 
-  const numCups = 4 + Math.floor(Math.random() * 2); // 4-5 cups
-  const shuffled = [...zones].sort(() => Math.random() - 0.5).slice(0, numCups);
-
-  for (let i = 0; i < shuffled.length; i++) {
-    const zone = shuffled[i];
-    const x = zone.xMin + Math.random() * (zone.xMax - zone.xMin);
-    const y = zone.yMin + Math.random() * (zone.yMax - zone.yMin);
-    const w = 0.075 + Math.random() * 0.018;
-    const h = 0.09 + Math.random() * 0.015;
-
-    cups.push({
-      x, y,
-      w, h,
-      color: cupColors[i % cupColors.length],
-      prize: selectRandomPrize(allPrizes),
-    });
-
-    platforms.push({
-      x,
-      y: y + h + 0.008,
-      w: w + 0.045,
-    });
+  // Assign unique prizes to each cup
+  const usedPrizes: Prize[] = [];
+  for (let i = 0; i < cols * rows; i++) {
+    usedPrizes.push(selectRandomPrize(allPrizes));
   }
 
-  // Random obstacles between sling and cups
-  const numObs = 2 + Math.floor(Math.random() * 2);
+  let idx = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      // Slight random offset for organic feel
+      const jitterX = (Math.random() - 0.5) * 0.025;
+      const jitterY = (Math.random() - 0.5) * 0.02;
+      const x = startX + col * spacingX + jitterX;
+      const y = startY + row * spacingY + jitterY;
+
+      cups.push({
+        x, y,
+        w: cupW + (Math.random() - 0.5) * 0.008,
+        h: cupH + (Math.random() - 0.5) * 0.008,
+        color: cupColors[idx % cupColors.length],
+        prize: usedPrizes[idx],
+      });
+
+      platforms.push({
+        x,
+        y: y + cupH + 0.008,
+        w: cupW + 0.04,
+      });
+      idx++;
+    }
+  }
+
+  // Fewer obstacles — just 1-2 small ones to add variety without blocking
+  const numObs = 1 + Math.floor(Math.random() * 2);
   for (let i = 0; i < numObs; i++) {
     const isVertical = Math.random() > 0.5;
     let ox: number, oy: number;
     let tries = 0;
 
     do {
-      ox = 0.28 + Math.random() * 0.52;
-      oy = 0.28 + Math.random() * 0.48;
+      ox = 0.25 + Math.random() * 0.15; // obstacles mostly in the gap between sling and cups
+      oy = 0.30 + Math.random() * 0.40;
       tries++;
     } while (
       tries < 40 &&
-      cups.some(c => Math.abs(c.x - ox) < 0.09 && Math.abs(c.y - oy) < 0.10)
+      cups.some(c => Math.abs(c.x - ox) < 0.10 && Math.abs(c.y - oy) < 0.12)
     );
 
     obstacles.push({
       x: ox,
       y: oy,
-      w: isVertical ? 0.025 + Math.random() * 0.008 : 0.065 + Math.random() * 0.035,
-      h: isVertical ? 0.13 + Math.random() * 0.07 : 0.020 + Math.random() * 0.008,
+      w: isVertical ? 0.020 + Math.random() * 0.006 : 0.050 + Math.random() * 0.025,
+      h: isVertical ? 0.10 + Math.random() * 0.05 : 0.018 + Math.random() * 0.006,
     });
   }
 
@@ -340,7 +352,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           ctx.font = `${Math.min(14, cupW * 0.5) * dpr}px serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.globalAlpha = 0.6;
+          ctx.globalAlpha = 0.7;
           ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.45);
           ctx.globalAlpha = 1;
         }
@@ -570,6 +582,8 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
               ball.y = cupTop + cupH * 0.45;
               ball.vx = 0; ball.vy = 0;
               getSoundEngine().swish();
+
+              // Any cup = WIN that cup's prize
               setShowLanded(true);
               setTimeout(() => setShowLanded(false), 1000);
               if (cup.prize) {
@@ -893,8 +907,9 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
                 Angry Ball
               </h1>
               <p style={{ color: CREAM + '60' }} className="text-[13px] leading-relaxed text-center max-w-[260px]">
-                Tirez la boule en arrière puis relâchez<br />pour la lancer dans un des trous !
-                <br /><span style={{ color: CREAM + '35' }} className="text-[11px]">Terrain aléatoire à chaque partie • {MAX_ATTEMPTS} tirs</span>
+                Tirez la boule et visez le cadeau
+                <br />que vous voulez gagner !
+                <br /><span style={{ color: CREAM + '35' }} className="text-[11px]">Chaque trou = un cadeau différent • {MAX_ATTEMPTS} tirs</span>
               </p>
               {gameOver && (
                 <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
