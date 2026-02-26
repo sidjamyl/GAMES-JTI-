@@ -86,8 +86,8 @@ function generateLayout(allPrizes: Prize[]): {
     const zone = shuffled[i];
     const x = zone.xMin + Math.random() * (zone.xMax - zone.xMin);
     const y = zone.yMin + Math.random() * (zone.yMax - zone.yMin);
-    const w = 0.055 + Math.random() * 0.012;
-    const h = 0.075 + Math.random() * 0.01;
+    const w = 0.075 + Math.random() * 0.018;
+    const h = 0.09 + Math.random() * 0.015;
 
     cups.push({
       x, y,
@@ -99,7 +99,7 @@ function generateLayout(allPrizes: Prize[]): {
     platforms.push({
       x,
       y: y + h + 0.008,
-      w: w + 0.035,
+      w: w + 0.045,
     });
   }
 
@@ -307,8 +307,8 @@ export default function AngryBall() {
         ctx.fill();
 
         // Cup walls — thick and bright
-        ctx.strokeStyle = cup.color + '70';
-        ctx.lineWidth = 2.5 * dpr;
+        ctx.strokeStyle = cup.color + '80';
+        ctx.lineWidth = 3 * dpr;
         ctx.stroke();
         ctx.restore();
 
@@ -558,10 +558,10 @@ export default function AngryBall() {
           const cupRight = cp.x + cupW / 2;
           const cupTop = cp.y;
           const cupBottom = cp.y + cupH;
-          const wallThick = 4 * dpr;
+          const wallThick = 5 * dpr;
 
           // Enter cup from the top — must be falling and within the opening
-          if (ball.x > cupLeft + br * 0.3 && ball.x < cupRight - br * 0.3 &&
+          if (ball.x > cupLeft + br * 0.15 && ball.x < cupRight - br * 0.15 &&
               ball.y + br > cupTop && ball.y < cupBottom && ball.vy > 0) {
             // Slow the ball inside the cup
             ball.vx *= 0.85;

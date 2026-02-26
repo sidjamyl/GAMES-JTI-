@@ -19,16 +19,16 @@ const AMBER = '#c9842b';
 const CREAM = '#f5e6c8';
 
 const GRID_SIZE = 9; // 3×3
-const GAME_DURATION = 12; // seconds — short and intense
+const GAME_DURATION = 10; // seconds — short and intense
 
 // Gifts appear VERY briefly and get faster over time
-const GIFT_SHOW_MIN = 320;  // ms minimum visible time
-const GIFT_SHOW_MAX = 600;  // ms maximum visible time
-const SPAWN_INTERVAL_START = 700; // ms between spawns at start
-const SPAWN_INTERVAL_END = 300;   // ms near end
+const GIFT_SHOW_MIN = 220;  // ms minimum visible time
+const GIFT_SHOW_MAX = 420;  // ms maximum visible time
+const SPAWN_INTERVAL_START = 480; // ms between spawns at start
+const SPAWN_INTERVAL_END = 180;   // ms near end
 // Late game: show times shrink further
-const LATE_GIFT_SHOW_MIN = 200;
-const LATE_GIFT_SHOW_MAX = 380;
+const LATE_GIFT_SHOW_MIN = 130;
+const LATE_GIFT_SHOW_MAX = 260;
 
 const CATCH_EMOJI = '✨';
 
