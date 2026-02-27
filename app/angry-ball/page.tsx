@@ -68,12 +68,12 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   // This ensures almost no empty space, forcing precision
   const cols = 3;
   const rows = 1;
-  const cupW = 0.068;
-  const cupH = 0.080;
-  const startX = 0.38;
+  const cupW = 0.085;
+  const cupH = 0.095;
+  const startX = 0.35;
   const endX = 0.88;
-  const startY = 0.48;
-  const endY = 0.48;
+  const startY = 0.45;
+  const endY = 0.45;
   const spacingX = cols > 1 ? (endX - startX) / (cols - 1) : 0;
   const spacingY = rows > 1 ? (endY - startY) / (rows - 1) : 0;
 
@@ -109,8 +109,8 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
     }
   }
 
-  // Moderate obstacles for a fair challenge
-  const numObs = 4 + Math.floor(Math.random() * 3);
+  // Light obstacles for a fair challenge
+  const numObs = 2 + Math.floor(Math.random() * 2);
   for (let i = 0; i < numObs; i++) {
     const isVertical = Math.random() > 0.5;
     let ox: number, oy: number;
@@ -133,16 +133,6 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
     });
   }
 
-  // Light shield — one small obstacle above each cup
-  for (const cup of cups) {
-    obstacles.push({
-      x: cup.x + (Math.random() - 0.5) * 0.04,
-      y: cup.y - 0.07 - Math.random() * 0.02,
-      w: 0.055 + Math.random() * 0.025,
-      h: 0.016 + Math.random() * 0.006,
-    });
-  }
-
   return { cups, obstacles, platforms };
 }
 
@@ -157,6 +147,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
   const [attempts, setAttempts] = useState(0);
   const [isPortrait, setIsPortrait] = useState(false);
+  const isPortraitRef = useRef(false);
   const [showLanded, setShowLanded] = useState(false);
   const [gameOver, setGameOver] = useState(false);
 
@@ -178,7 +169,11 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { fetchPrizes().then(p => { setPrizes(p); setPhase('ready'); }); }, []);
   useEffect(() => {
-    const check = () => setIsPortrait(window.innerWidth < window.innerHeight);
+    const check = () => {
+      const p = window.innerWidth < window.innerHeight;
+      setIsPortrait(p);
+      isPortraitRef.current = p;
+    };
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
@@ -819,6 +814,31 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
     const dpr = dprRef.current;
     const cx = 'touches' in e ? e.touches[0]?.clientX ?? 0 : e.clientX;
     const cy = 'touches' in e ? e.touches[0]?.clientY ?? 0 : e.clientY;
+
+    // When in portrait mode, the wrapper is CSS-rotated 90deg.
+    // The bounding rect reflects the rotated (visual) position,
+    // but the canvas internal coords are in the pre-rotation space.
+    // We need to map screen touch → rotated container → canvas coords.
+    if (isPortraitRef.current) {
+      // rect center in screen space
+      const rcx = rect.left + rect.width / 2;
+      const rcy = rect.top + rect.height / 2;
+      // offset from center in screen space
+      const dx = cx - rcx;
+      const dy = cy - rcy;
+      // un-rotate by -90deg (the CSS does +90deg: rotate(90deg))
+      // rotate(-90): x' = dy, y' = -dx
+      const ux = dy;
+      const uy = -dx;
+      // The actual canvas element size (pre-rotation) is height x width of the visual rect
+      const canvasW = rect.height; // visual width becomes canvas height after rotation
+      const canvasH = rect.width;  // visual height becomes canvas width after rotation
+      return {
+        x: (ux + canvasW / 2) * dpr,
+        y: (uy + canvasH / 2) * dpr,
+      };
+    }
+
     return { x: (cx - rect.left) * dpr, y: (cy - rect.top) * dpr };
   }, []);
 
@@ -828,7 +848,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
     if (ball.launched || ball.landed) return;
     const pos = getCanvasPos(e);
     const dx = pos.x - ball.x, dy = pos.y - ball.y;
-    if (Math.sqrt(dx * dx + dy * dy) < 50 * dprRef.current) {
+    if (Math.sqrt(dx * dx + dy * dy) < 80 * dprRef.current) {
       draggingRef.current = true;
     }
   }, [phase, getCanvasPos]);
