@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Prize, GamePhase } from '../lib/types';
-import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
+import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
@@ -22,7 +22,7 @@ const GROUND_FRICTION = 0.88;
 const MAX_PULL = 120;
 const LAUNCH_MULTIPLIER = 0.18;
 const GAME_ASPECT = 1.9;
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 const RESTITUTION = 0.35;
 
 const SLING_ANCHOR = { x: 0.10, y: 0.58 };
@@ -80,7 +80,7 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   // Assign unique prizes to each cup
   const usedPrizes: Prize[] = [];
   for (let i = 0; i < cols * rows; i++) {
-    usedPrizes.push(selectRandomPrize(allPrizes));
+    usedPrizes.push(selectPremiumPrize(allPrizes));
   }
 
   let idx = 0;
@@ -630,7 +630,9 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           setAttempts(attemptsRef.current);
           if (attemptsRef.current >= MAX_ATTEMPTS) {
             setGameOver(true);
-            setPhase('ready');
+            const consolation = getConsolationPrize(prizes);
+            setWonPrize(consolation);
+            setTimeout(() => setPhase('victory'), 800);
             return;
           }
           resetBall();
@@ -642,7 +644,9 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           setAttempts(attemptsRef.current);
           if (attemptsRef.current >= MAX_ATTEMPTS) {
             setGameOver(true);
-            setPhase('ready');
+            const consolation = getConsolationPrize(prizes);
+            setWonPrize(consolation);
+            setTimeout(() => setPhase('victory'), 800);
             return;
           }
           resetBall();

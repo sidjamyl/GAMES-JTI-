@@ -21,14 +21,6 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
       accentTo: AMBER,
     },
     {
-      href: `${routePrefix}/whac-a-mole`,
-      title: "Gift Catcher",
-      desc: "Attrapez un cadeau avant qu'il disparaisse !",
-      emoji: "🎁",
-      accentFrom: GOLD_BRIGHT,
-      accentTo: GOLD,
-    },
-    {
       href: `${routePrefix}/gyro-maze`,
       title: "Gyro Maze",
       desc: "Guidez la bille dans un labyrinthe aléatoire",
@@ -45,28 +37,12 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
       accentTo: '#ef4444',
     },
     {
-      href: `${routePrefix}/gift-slice`,
-      title: "Gift Slice",
-      desc: "Tranchez les cadeaux, évitez les bombes !",
-      emoji: "🗡️",
-      accentFrom: '#ef4444',
-      accentTo: GOLD_BRIGHT,
-    },
-    {
       href: `${routePrefix}/pendulum`,
       title: "Pendulum",
       desc: "Attrapez le cadeau au bon moment !",
       emoji: "🎣",
       accentFrom: GOLD,
       accentTo: '#6366f1',
-    },
-    {
-      href: `${routePrefix}/stack-tower`,
-      title: "Stack Tower",
-      desc: "Empilez les blocs le plus haut possible",
-      emoji: "🏗️",
-      accentFrom: AMBER,
-      accentTo: GOLD_BRIGHT,
     },
     {
       href: `${routePrefix}/cannon`,

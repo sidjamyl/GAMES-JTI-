@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Prize, GamePhase } from '../lib/types';
-import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
+import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
@@ -22,6 +22,7 @@ const ACCEL = 0.42;
 const MAX_SPEED = 3.5;
 const RESTITUTION = 0.25;
 const PHYSICS_SUBSTEPS = 3;
+const TIME_LIMIT = 30; // seconds before consolation prize
 
 const MAZE_COLS = 7;
 const MAZE_ROWS = 7;
@@ -185,6 +186,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [hasGyro, setHasGyro] = useState<boolean | null>(null);
+  const [gameOver, setGameOver] = useState(false);
   const [gyroPermission, setGyroPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -303,7 +305,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
     const goals: GoalDef[] = exits.map((exit, i) => ({
       x: exit.nx,
       y: exit.ny,
-      prize: selectRandomPrize(prizes),
+      prize: selectPremiumPrize(prizes),
       color: GOAL_COLORS[i % GOAL_COLORS.length],
     }));
     goalsRef.current = goals;
@@ -328,6 +330,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
     resetBall();
     setElapsed(0);
     setWonPrize(null);
+    setGameOver(false);
     tiltRef.current = { x: 0, y: 0 };
     startTimeRef.current = Date.now();
     setPhase('playing');
@@ -526,6 +529,17 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       }
       if (hitWall) getSoundEngine().peg(Math.floor(Math.random() * 5));
 
+      // Time limit check
+      const elapsedSec = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      if (elapsedSec >= TIME_LIMIT) {
+        const consolation = getConsolationPrize(prizes);
+        setWonPrize(consolation);
+        setGameOver(true);
+        setPhase('victory');
+        if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+        return;
+      }
+
       // Goal collision
       for (const goal of goalsRef.current) {
         const gp = toCanvas(goal.x, goal.y);
@@ -623,8 +637,8 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       {phase === 'playing' && (
         <div className="w-full max-w-[400px] flex items-center justify-center px-6 py-2 z-10" style={{ animation: 'fadeIn 0.3s ease-out both' }}>
           <div className="flex items-center gap-2">
-            <span style={{ color: CREAM + '50' }} className="text-[11px] font-semibold uppercase tracking-wider">Temps</span>
-            <span style={{ color: CREAM + 'aa' }} className="text-sm font-bold tabular-nums">{elapsed}s</span>
+            <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + '50' }} className="text-[11px] font-semibold uppercase tracking-wider">⏱</span>
+            <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + 'aa' }} className="text-sm font-bold tabular-nums">{Math.max(0, TIME_LIMIT - elapsed)}s</span>
           </div>
         </div>
       )}
@@ -662,9 +676,16 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
               Gyro Maze
             </h2>
             <p style={{ color: CREAM + '50' }} className="text-[13px] text-center max-w-[260px] leading-relaxed">
-              Un labyrinthe aléatoire vous attend.<br />
-              Guidez la bille vers un des 3 cadeaux !<br />
-              <span style={{ color: CREAM + '30' }} className="text-[11px]">Inclinez ou touchez pour diriger</span>
+              {gameOver ? (
+                <>Temps écoulé… Pas de chance cette fois !</>
+              ) : (
+                <>
+                  Un labyrinthe aléatoire vous attend.<br />
+                  Guidez la bille vers un des 3 cadeaux<br />
+                  en moins de {TIME_LIMIT} secondes !<br />
+                  <span style={{ color: CREAM + '30' }} className="text-[11px]">Inclinez ou touchez pour diriger</span>
+                </>
+              )}
             </p>
             {hasGyro === false && (
               <p className="text-[11px] text-center" style={{ color: AMBER + '80', animation: 'fadeIn 0.5s ease-out 0.3s both' }}>

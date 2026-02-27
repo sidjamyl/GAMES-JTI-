@@ -67,3 +67,21 @@ export function selectRandomPrize(prizes: Prize[]): Prize {
   }
   return available[0];
 }
+
+/** Select a premium prize (everything except Briquet) */
+export function selectPremiumPrize(prizes: Prize[]): Prize {
+  const premium = prizes.filter((p) => p.quantity > 0 && p.name !== 'Briquet');
+  if (premium.length === 0) return selectRandomPrize(prizes);
+  const total = premium.reduce((s, p) => s + p.quantity, 0);
+  let r = Math.random() * total;
+  for (const p of premium) {
+    r -= p.quantity;
+    if (r <= 0) return p;
+  }
+  return premium[0];
+}
+
+/** Get the consolation / default prize (Briquet) */
+export function getConsolationPrize(prizes: Prize[]): Prize {
+  return prizes.find((p) => p.name === 'Briquet') || prizes[prizes.length - 1];
+}

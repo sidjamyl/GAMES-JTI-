@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { Prize, GamePhase } from '../lib/types';
-import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
+import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
@@ -30,6 +30,7 @@ interface Particle {
 const GRAVITY = 0.14;
 const BALL_R = 7;
 const GIFT_HUES = [0, 30, 50, 120, 200, 280, 340];
+const MAX_ATTEMPTS = 3;
 
 export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   const T = { ...DEFAULT_THEME, ...theme };
@@ -42,6 +43,8 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   const phaseRef = useRef<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
+  const [attempts, setAttempts] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
   const animRef = useRef<number>(0);
   const dprRef = useRef(1);
 
@@ -61,6 +64,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     active: false, startX: 0, startY: 0, startAngle: 0, startPower: 0,
   });
   const hitRef = useRef(false);
+  const attemptsRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { fetchPrizes().then((p) => { setPrizes(p); setPhase('ready'); }); }, []);
@@ -93,15 +97,15 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     sizeRef.current = { w, h };
 
     const platforms: Platform[] = [];
-    const sorted = [...prizes].filter(p => p.quantity > 0).sort((a, b) => a.quantity - b.quantity);
-    const platCount = Math.min(5, sorted.length);
+    const premium = [...prizes].filter(p => p.quantity > 0 && p.name !== 'Briquet').sort((a, b) => a.quantity - b.quantity);
+    const platCount = Math.min(5, Math.max(3, premium.length));
     for (let i = 0; i < platCount; i++) {
       const t = (i + 1) / (platCount + 1);
       platforms.push({
         x: w * 0.22 + t * w * 0.7,
         y: h * 0.25 + Math.sin(t * Math.PI) * h * 0.3,
-        width: 46 + (platCount - i) * 8,
-        prize: sorted[i],
+        width: 38 + (platCount - i) * 6,
+        prize: premium[i % premium.length] || selectPremiumPrize(prizes),
         hue: GIFT_HUES[i % GIFT_HUES.length],
       });
     }
@@ -417,8 +421,26 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
           addParticles(Math.min(Math.max(ball.x, 10), w - 10), Math.min(ball.y, h - 45), 'smoke', 10);
           shakeRef.current.amount = 4;
           try { getSoundEngine().miss(); } catch {}
-          // Missed — no prize, return to ready screen
-          setTimeout(() => setPhase('ready'), 1000);
+          attemptsRef.current++;
+          setAttempts(attemptsRef.current);
+          if (attemptsRef.current >= MAX_ATTEMPTS) {
+            // All attempts used — consolation prize
+            const consolation = getConsolationPrize(prizes);
+            setWonPrize(consolation);
+            setGameOver(true);
+            setTimeout(() => setPhase('victory'), 1000);
+          } else {
+            // Reset cannon for next shot
+            setTimeout(() => {
+              firedRef.current = false;
+              ballRef.current = null;
+              hitRef.current = false;
+              debrisRef.current = [];
+              angleRef.current = -Math.PI / 4;
+              powerRef.current = 0.6;
+              windRef.current = (Math.random() - 0.5) * 0.05;
+            }, 1000);
+          }
         }
       }
 
@@ -482,6 +504,14 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         ctx.textBaseline = 'middle';
         ctx.fillText('TIRER', btnX, btnY + 1);
       }
+
+      // HUD — attempts remaining
+      const remaining = MAX_ATTEMPTS - attemptsRef.current;
+      ctx.fillStyle = CREAM + '60';
+      ctx.font = 'bold 13px system-ui';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`${'💣'.repeat(remaining)}${'✖️'.repeat(attemptsRef.current)}`, 14, h - 24);
 
       animRef.current = requestAnimationFrame(loop);
     };
@@ -553,6 +583,9 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     ballRef.current = null;
     hitRef.current = false;
     debrisRef.current = [];
+    attemptsRef.current = 0;
+    setAttempts(0);
+    setGameOver(false);
     setPhase('playing');
   };
 
@@ -572,12 +605,18 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>Cannon</h1>
           <p className="text-[14px] text-center max-w-[280px] leading-relaxed" style={{ color: CREAM + '60' }}>
-            Visez et tirez ! Un seul coup pour<br/>atteindre le cadeau de vos rêves.
+            Visez et tirez ! Atteignez un cadeau<br/>sur les plateformes pour le gagner.
+            <br/><span style={{ color: CREAM + '35' }} className="text-[11px]">{MAX_ATTEMPTS} tirs pour décrocher un cadeau premium</span>
           </p>
+          {gameOver && (
+            <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
+              Perdu ! Réessayez 💪
+            </p>
+          )}
           <button onClick={start} className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-lg tracking-wide transition-all active:scale-[0.96]" style={{
             background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`,
             boxShadow: `0 12px 40px -10px ${GOLD}80`,
-          }}>Tirer</button>
+          }}>{gameOver ? 'Réessayer 💣' : 'Tirer'}</button>
         </div>
       )}
       {phase === 'loading' && (

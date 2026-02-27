@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { Prize, GamePhase } from '../lib/types';
-import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
+import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
@@ -30,6 +30,7 @@ interface Particle {
 }
 
 const GIFT_HUES = [0, 35, 55, 120, 210, 280, 340];
+const MAX_ATTEMPTS = 3;
 
 export default function Pendulum({ theme }: { theme?: GameTheme }) {
   const T = { ...DEFAULT_THEME, ...theme };
@@ -44,6 +45,8 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
   const [missed, setMissed] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
   const animRef = useRef<number>(0);
   const dprRef = useRef(1);
 
@@ -65,6 +68,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
   const particlesRef = useRef<Particle[]>([]);
   const shakeRef = useRef({ amount: 0 });
   const lastTimeRef = useRef(0);
+  const attemptsRef = useRef(0);
 
   const DAMPING = 0.9988;
   const G_ACCEL = 0.0012;
@@ -93,8 +97,8 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
     for (let i = 0; i < count; i++) {
       items.push({
         x: -40 + i * spacing,
-        prize: selectRandomPrize(prizes),
-        speed: 0.5 + Math.random() * 0.3,
+        prize: selectPremiumPrize(prizes),
+        speed: 0.7 + Math.random() * 0.4,
         size: giftSize,
         hue: GIFT_HUES[Math.floor(Math.random() * GIFT_HUES.length)],
         bobPhase: Math.random() * Math.PI * 2,
@@ -212,12 +216,11 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
           let bestItem: ConveyorItem | null = null;
           for (const item of conveyorRef.current) {
             if (item.grabbed) continue;
-            const halfW = item.size * 0.6;  // generous horizontal hitbox
-            const giftTopY = conveyorY - item.size * 0.5 + 8; // top of the gift box (matches render)
+            const halfW = item.size * 0.45;  // tighter horizontal hitbox
+            const giftTopY = conveyorY - item.size * 0.5 + 8;
             const giftBottomY = giftTopY + item.size;
-            // Check if hook is within the box bounds (with generous margin)
             const inX = Math.abs(hookEndX - item.x) < halfW;
-            const inY = hookEndY >= giftTopY - 8 && hookEndY <= giftBottomY + 8;
+            const inY = hookEndY >= giftTopY - 4 && hookEndY <= giftBottomY + 4;
             if (inX && inY) {
               const dx = hookEndX - item.x;
               const dist = Math.abs(dx);
@@ -260,14 +263,27 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
             setTimeout(() => setPhase('victory'), 500);
             return;
           } else {
-            // Missed — reset pendulum, keep playing with fast swing
+            // Missed — track attempts
+            attemptsRef.current++;
+            setAttempts(attemptsRef.current);
+            if (attemptsRef.current >= MAX_ATTEMPTS) {
+              // All attempts used — consolation prize
+              doneRef.current = true;
+              const consolation = getConsolationPrize(prizes);
+              setWonPrize(consolation);
+              setGameOver(true);
+              try { getSoundEngine().miss(); } catch {}
+              setTimeout(() => setPhase('victory'), 800);
+              return;
+            }
+            // Reset pendulum for next attempt
             pend.dropping = false;
             pend.retracting = false;
             pend.extension = 0;
             pend.extSpeed = 0;
             pend.clawOpen = 1;
             pend.clawTarget = 1;
-            pend.angle = (pend.frozenAngle >= 0) ? 0.75 : -0.75; // restart from same side, full amplitude
+            pend.angle = (pend.frozenAngle >= 0) ? 0.75 : -0.75;
             pend.angVel = 0;
             caughtRef.current = null;
           }
@@ -607,6 +623,13 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       ctx.globalAlpha = 1;
 
       /* ── HUD ── */
+      // Attempts counter top-left
+      const remaining = MAX_ATTEMPTS - attemptsRef.current;
+      ctx.fillStyle = CREAM + '60';
+      ctx.font = 'bold 13px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${'🪝'.repeat(remaining)}${'✖️'.repeat(attemptsRef.current)}`, 14, 24);
+
       if (!pend.dropping) {
         ctx.fillStyle = CREAM + '25';
         ctx.font = '12px system-ui';
@@ -644,7 +667,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
     try { getSoundEngine().swoosh(); } catch {}
   };
 
-  const start = () => { setWonPrize(null); setMissed(false); caughtRef.current = null; setPhase('playing'); };
+  const start = () => { setWonPrize(null); setMissed(false); setAttempts(0); attemptsRef.current = 0; setGameOver(false); caughtRef.current = null; setPhase('playing'); };
 
   return (
     <div className="game-container noise-overlay flex flex-col items-center justify-center" style={{ background: BG_DARK }}>
@@ -661,10 +684,16 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
           }}>Pendulum</h1>
           <p className="text-[14px] text-center max-w-[260px] leading-relaxed" style={{ color: CREAM + '60' }}>
             Le pendule oscille. Tapez au bon moment<br/>pour attraper un cadeau sur le tapis !
+            <br/><span style={{ color: CREAM + '35' }} className="text-[11px]">{MAX_ATTEMPTS} tentatives pour gagner un cadeau premium</span>
           </p>
+          {gameOver && (
+            <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
+              Perdu ! Réessayez 💪
+            </p>
+          )}
           <button onClick={start} className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-lg tracking-wide transition-all active:scale-[0.96]" style={{
             background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, boxShadow: `0 12px 40px -10px ${GOLD}80`,
-          }}>Commencer</button>
+          }}>{gameOver ? 'Réessayer 🪝' : 'Commencer'}</button>
         </div>
       )}
       {phase === 'loading' && (
