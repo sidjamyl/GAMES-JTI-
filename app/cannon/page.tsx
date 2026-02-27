@@ -22,13 +22,16 @@ interface Debris {
   w: number; h: number; color: string;
   life: number; maxLife: number;
 }
+interface CannonObstacle {
+  x: number; y: number; w: number; h: number;
+}
 interface Particle {
   x: number; y: number; vx: number; vy: number;
   life: number; maxLife: number; size: number; color: string; type: 'smoke' | 'spark' | 'trail';
 }
 
-const GRAVITY = 0.14;
-const BALL_R = 7;
+const GRAVITY = 0.16;
+const BALL_R = 6;
 const GIFT_HUES = [0, 30, 50, 120, 200, 280, 340];
 const MAX_ATTEMPTS = 3;
 
@@ -57,6 +60,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   const sizeRef = useRef({ w: 0, h: 0 });
   const particlesRef = useRef<Particle[]>([]);
   const debrisRef = useRef<Debris[]>([]);
+  const obstaclesRef = useRef<CannonObstacle[]>([]);
   const shakeRef = useRef({ amount: 0 });
   const timeRef = useRef(0);
   const lastTimeRef = useRef(0);
@@ -103,14 +107,27 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       const t = (i + 1) / (platCount + 1);
       platforms.push({
         x: w * 0.22 + t * w * 0.7,
-        y: h * 0.25 + Math.sin(t * Math.PI) * h * 0.3,
-        width: 38 + (platCount - i) * 6,
+        y: h * 0.20 + Math.sin(t * Math.PI) * h * 0.35,
+        width: 24 + (platCount - i) * 3,
         prize: premium[i % premium.length] || selectPremiumPrize(prizes),
         hue: GIFT_HUES[i % GIFT_HUES.length],
       });
     }
     platformsRef.current = platforms;
-    windRef.current = (Math.random() - 0.5) * 0.05;
+
+    // Generate many floating obstacles between cannon and platforms
+    const obstacles: CannonObstacle[] = [];
+    for (let i = 0; i < 6 + Math.floor(Math.random() * 4); i++) {
+      obstacles.push({
+        x: w * 0.12 + Math.random() * w * 0.75,
+        y: h * 0.10 + Math.random() * h * 0.55,
+        w: 35 + Math.random() * 30,
+        h: 8 + Math.random() * 8,
+      });
+    }
+    obstaclesRef.current = obstacles;
+
+    windRef.current = (Math.random() - 0.5) * 0.10;
     angleRef.current = -Math.PI / 4;
     powerRef.current = 0.6;
     firedRef.current = false;
@@ -264,6 +281,39 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         }
       }
 
+      // === Obstacles (floating barriers — they oscillate!) ===
+      for (let oi = 0; oi < obstaclesRef.current.length; oi++) {
+        const obs = obstaclesRef.current[oi];
+        // Oscillate obstacles vertically
+        const oscAmp = 15 + (oi % 3) * 8;
+        const oscSpeed = 0.018 + (oi % 4) * 0.006;
+        const oscOffset = Math.sin(timeRef.current * oscSpeed + oi * 2.1) * oscAmp;
+        const ox = obs.x - obs.w / 2;
+        const oy = (obs.y + oscOffset) - obs.h / 2;
+        ctx.save();
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = 'rgba(200,50,50,0.3)';
+        const obsGrad = ctx.createLinearGradient(ox, oy, ox + obs.w, oy + obs.h);
+        obsGrad.addColorStop(0, '#4a2a2a');
+        obsGrad.addColorStop(0.5, '#6a3a3a');
+        obsGrad.addColorStop(1, '#4a2a2a');
+        ctx.fillStyle = obsGrad;
+        ctx.beginPath(); ctx.roundRect(ox, oy, obs.w, obs.h, 3); ctx.fill();
+        ctx.strokeStyle = '#8a4a4a';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+        // Danger stripe marks
+        ctx.strokeStyle = 'rgba(255,200,50,0.15)';
+        ctx.lineWidth = 1;
+        for (let sx = ox + 4; sx < ox + obs.w - 2; sx += 6) {
+          ctx.beginPath();
+          ctx.moveTo(sx, oy + 1);
+          ctx.lineTo(sx - 2, oy + obs.h - 1);
+          ctx.stroke();
+        }
+      }
+
       // === Cannon ===
       const angle = angleRef.current;
       const power = powerRef.current;
@@ -328,23 +378,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(cannonBaseX, cannonBaseY, gaugeR, -Math.PI * 0.8, fillEnd); ctx.stroke();
 
-        // Dotted trajectory preview
-        ctx.setLineDash([3, 5]);
-        ctx.strokeStyle = `rgba(${goldRgb},0.12)`;
-        ctx.lineWidth = 1;
-        const maxPower = 14;
-        const pw = power * maxPower;
-        let gx = bx, gy = by;
-        let gvx = Math.cos(angle) * pw;
-        let gvy = Math.sin(angle) * pw;
-        ctx.beginPath(); ctx.moveTo(gx, gy);
-        for (let t = 0; t < 80; t++) {
-          gvx += windRef.current; gvy += GRAVITY; gx += gvx; gy += gvy;
-          if (gy > h - 40 || gx > w + 20 || gx < -20) break;
-          ctx.lineTo(gx, gy);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
+        // No trajectory preview — pure skill!
 
         ctx.fillStyle = CREAM + '20';
         ctx.font = '10px system-ui';
@@ -355,9 +389,41 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       // Ball
       const ball = ballRef.current;
       if (ball) {
+        // Wind gusts — shifts during flight
+        windRef.current += (Math.random() - 0.5) * 0.003 * dt;
+        windRef.current = Math.max(-0.15, Math.min(0.15, windRef.current));
         ball.vx += windRef.current * dt;
         ball.vy += GRAVITY * dt;
         ball.x += ball.vx * dt; ball.y += ball.vy * dt;
+
+        // Obstacle collision (ball bounces off — uses oscillating positions)
+        for (let oi = 0; oi < obstaclesRef.current.length; oi++) {
+          const obs = obstaclesRef.current[oi];
+          const oscAmp = 15 + (oi % 3) * 8;
+          const oscSpeed = 0.018 + (oi % 4) * 0.006;
+          const oscOffset = Math.sin(timeRef.current * oscSpeed + oi * 2.1) * oscAmp;
+          const left = obs.x - obs.w / 2;
+          const right = obs.x + obs.w / 2;
+          const top = (obs.y + oscOffset) - obs.h / 2;
+          const bottom = (obs.y + oscOffset) + obs.h / 2;
+          const nearX = Math.max(left, Math.min(right, ball.x));
+          const nearY = Math.max(top, Math.min(bottom, ball.y));
+          const dx = ball.x - nearX, dy = ball.y - nearY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < BALL_R && dist > 0) {
+            const nx = dx / dist, ny = dy / dist;
+            const pen = BALL_R - dist;
+            ball.x += nx * pen;
+            ball.y += ny * pen;
+            const dot = ball.vx * nx + ball.vy * ny;
+            if (dot < 0) {
+              ball.vx -= 2 * dot * nx * 0.6;
+              ball.vy -= 2 * dot * ny * 0.6;
+            }
+            addParticles(ball.x, ball.y, 'spark', 5, GOLD);
+            try { getSoundEngine().peg(0); } catch {}
+          }
+        }
 
         if (Math.floor(timeRef.current) % 2 === 0 && Math.floor(timeRef.current) !== Math.floor(timeRef.current - dt)) {
           particlesRef.current.push({
@@ -378,8 +444,8 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
 
         if (!hitRef.current) {
           for (const plat of platformsRef.current) {
-            const onX = ball.x >= plat.x - plat.width / 2 - BALL_R && ball.x <= plat.x + plat.width / 2 + BALL_R;
-            const onY = ball.y + BALL_R >= plat.y && ball.y + BALL_R <= plat.y + 18 && ball.vy > 0;
+            const onX = ball.x >= plat.x - plat.width / 2 - BALL_R * 0.5 && ball.x <= plat.x + plat.width / 2 + BALL_R * 0.5;
+            const onY = ball.y + BALL_R >= plat.y && ball.y + BALL_R <= plat.y + 12 && ball.vy > 0;
             if (onX && onY) {
               hitRef.current = true;
               plat.hit = true;
@@ -438,7 +504,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
               debrisRef.current = [];
               angleRef.current = -Math.PI / 4;
               powerRef.current = 0.6;
-              windRef.current = (Math.random() - 0.5) * 0.05;
+              windRef.current = (Math.random() - 0.5) * 0.12;
             }, 1000);
           }
         }

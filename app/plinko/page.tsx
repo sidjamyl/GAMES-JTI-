@@ -23,7 +23,8 @@ const BOUNCE_DAMPING = 0.55;
 const HORIZONTAL_DAMPING = 0.96;
 const GYRO_STRENGTH = 0.08; // how much tilt affects the ball
 const MAX_ATTEMPTS = 3;
-const PRIZE_SLOTS = 2; // how many slots contain a premium prize
+const MIN_PRIZE_SLOTS = 3; // minimum prize slots regardless of screen size
+const PRIZE_SLOT_RATIO = 0.25; // 25% of slots will have prizes
 
 interface Ball {
   x: number;
@@ -172,9 +173,10 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
   // Place PRIZE_SLOTS premium prizes in random positions; the rest are null (miss)
   const assignSlotPrizes = useCallback(() => {
     const { slotCount } = gridRef.current;
+    const prizeCount = Math.max(MIN_PRIZE_SLOTS, Math.ceil(slotCount * PRIZE_SLOT_RATIO));
     const slots: (Prize | null)[] = new Array(slotCount).fill(null);
     const positions = new Set<number>();
-    while (positions.size < Math.min(PRIZE_SLOTS, slotCount)) {
+    while (positions.size < Math.min(prizeCount, slotCount)) {
       positions.add(Math.floor(Math.random() * slotCount));
     }
     for (const pos of positions) {

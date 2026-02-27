@@ -67,15 +67,15 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   // Dense grid layout — 3 columns x 3 rows covering the right side
   // This ensures almost no empty space, forcing precision
   const cols = 3;
-  const rows = 3;
-  const cupW = 0.072;
-  const cupH = 0.085;
-  const startX = 0.42;
-  const endX = 0.93;
-  const startY = 0.22;
-  const endY = 0.82;
-  const spacingX = (endX - startX) / (cols - 1);
-  const spacingY = (endY - startY) / (rows - 1);
+  const rows = 1;
+  const cupW = 0.068;
+  const cupH = 0.080;
+  const startX = 0.38;
+  const endX = 0.88;
+  const startY = 0.48;
+  const endY = 0.48;
+  const spacingX = cols > 1 ? (endX - startX) / (cols - 1) : 0;
+  const spacingY = rows > 1 ? (endY - startY) / (rows - 1) : 0;
 
   // Assign unique prizes to each cup
   const usedPrizes: Prize[] = [];
@@ -109,16 +109,16 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
     }
   }
 
-  // Fewer obstacles — just 1-2 small ones to add variety without blocking
-  const numObs = 1 + Math.floor(Math.random() * 2);
+  // Moderate obstacles for a fair challenge
+  const numObs = 4 + Math.floor(Math.random() * 3);
   for (let i = 0; i < numObs; i++) {
     const isVertical = Math.random() > 0.5;
     let ox: number, oy: number;
     let tries = 0;
 
     do {
-      ox = 0.25 + Math.random() * 0.15; // obstacles mostly in the gap between sling and cups
-      oy = 0.30 + Math.random() * 0.40;
+      ox = 0.20 + Math.random() * 0.65; // obstacles spread across the play field
+      oy = 0.15 + Math.random() * 0.65;
       tries++;
     } while (
       tries < 40 &&
@@ -128,8 +128,18 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
     obstacles.push({
       x: ox,
       y: oy,
-      w: isVertical ? 0.020 + Math.random() * 0.006 : 0.050 + Math.random() * 0.025,
-      h: isVertical ? 0.10 + Math.random() * 0.05 : 0.018 + Math.random() * 0.006,
+      w: isVertical ? 0.025 + Math.random() * 0.010 : 0.070 + Math.random() * 0.035,
+      h: isVertical ? 0.14 + Math.random() * 0.08 : 0.022 + Math.random() * 0.010,
+    });
+  }
+
+  // Light shield — one small obstacle above each cup
+  for (const cup of cups) {
+    obstacles.push({
+      x: cup.x + (Math.random() - 0.5) * 0.04,
+      y: cup.y - 0.07 - Math.random() * 0.02,
+      w: 0.055 + Math.random() * 0.025,
+      h: 0.016 + Math.random() * 0.006,
     });
   }
 

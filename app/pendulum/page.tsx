@@ -22,6 +22,8 @@ interface ConveyorItem {
   hue: number;
   bobPhase: number;
   grabbed: boolean;
+  vx: number;
+  dirTimer: number;
 }
 
 interface Particle {
@@ -70,8 +72,8 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
   const lastTimeRef = useRef(0);
   const attemptsRef = useRef(0);
 
-  const DAMPING = 0.9988;
-  const G_ACCEL = 0.0012;
+  const DAMPING = 0.9992;
+  const G_ACCEL = 0.0038;
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { fetchPrizes().then(p => { setPrizes(p); setPhase('ready'); }); }, []);
@@ -92,17 +94,19 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
     const items: ConveyorItem[] = [];
     const giftSize = Math.max(26, Math.min(36, w * 0.085));
     const giftGap = giftSize * 0.5;
-    const count = Math.max(5, Math.floor((w + 100) / (giftSize + giftGap)));
-    const spacing = (w + 100) / count;
+    const count = Math.max(2, Math.floor((w + 100) / (giftSize + giftGap) * 0.25));
+    const spacing = w / Math.max(count, 1);
     for (let i = 0; i < count; i++) {
       items.push({
-        x: -40 + i * spacing,
+        x: 40 + i * spacing,
         prize: selectPremiumPrize(prizes),
-        speed: 0.7 + Math.random() * 0.4,
+        speed: 1.8 + Math.random() * 1.0,
         size: giftSize,
         hue: GIFT_HUES[Math.floor(Math.random() * GIFT_HUES.length)],
         bobPhase: Math.random() * Math.PI * 2,
         grabbed: false,
+        vx: (Math.random() > 0.5 ? 1 : -1) * (2.5 + Math.random() * 2.0),
+        dirTimer: 20 + Math.floor(Math.random() * 40),
       });
     }
     conveyorRef.current = items;
@@ -216,7 +220,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
           let bestItem: ConveyorItem | null = null;
           for (const item of conveyorRef.current) {
             if (item.grabbed) continue;
-            const halfW = item.size * 0.45;  // tighter horizontal hitbox
+            const halfW = item.size * 0.30;  // very tight horizontal hitbox
             const giftTopY = conveyorY - item.size * 0.5 + 8;
             const giftBottomY = giftTopY + item.size;
             const inX = Math.abs(hookEndX - item.x) < halfW;
@@ -547,10 +551,16 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       /* ── CONVEYOR ITEMS ── */
       for (const item of conveyorRef.current) {
         if (item.grabbed) continue; // skip grabbed items
-        item.x += item.speed * dt;
-        if (item.x > w + 80) {
-          item.x = -80; // wrap around naturally
+        // Random movement — gifts change direction unpredictably
+        item.dirTimer -= dt;
+        if (item.dirTimer <= 0) {
+          item.vx = (Math.random() > 0.5 ? 1 : -1) * (2.5 + Math.random() * 3.5);
+          item.dirTimer = 12 + Math.floor(Math.random() * 30);
         }
+        item.x += item.vx * dt;
+        // Bounce off edges
+        if (item.x < item.size) { item.x = item.size; item.vx = Math.abs(item.vx); }
+        if (item.x > w - item.size) { item.x = w - item.size; item.vx = -Math.abs(item.vx); }
 
         const s = item.size;
         const bob = Math.sin(timeRef.current * 0.035 + item.bobPhase) * 2;

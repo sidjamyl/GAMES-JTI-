@@ -19,17 +19,20 @@ const GOAL_RADIUS = 12;
 const WALL_THICKNESS = 3;
 const FRICTION = 0.96;
 const ACCEL = 0.42;
-const MAX_SPEED = 3.5;
+const MAX_SPEED = 2.8;
 const RESTITUTION = 0.25;
 const PHYSICS_SUBSTEPS = 3;
-const TIME_LIMIT = 30; // seconds before consolation prize
+const TIME_LIMIT = 35; // seconds before consolation prize
+const MAX_ATTEMPTS = 3;
+const HOLE_RADIUS = 6;
 
-const MAZE_COLS = 7;
-const MAZE_ROWS = 7;
+const MAZE_COLS = 12;
+const MAZE_ROWS = 12;
 
 interface WallSeg { x1: number; y1: number; x2: number; y2: number; }
 interface GoalDef { x: number; y: number; prize: Prize; color: string; }
 interface BallState { x: number; y: number; vx: number; vy: number; }
+interface HoleDef { x: number; y: number; }
 
 /* ── Maze generation using recursive backtracking ── */
 function generateMaze(cols: number, rows: number): boolean[][][] {
@@ -81,8 +84,8 @@ function generateMaze(cols: number, rows: number): boolean[][][] {
     }
   }
 
-  // Remove a few extra walls to create loops (makes maze less frustrating)
-  const extraRemovals = Math.floor(cols * rows * 0.12);
+  // Remove very few extra walls — keep maze tight and challenging
+  const extraRemovals = Math.floor(cols * rows * 0.01);
   for (let i = 0; i < extraRemovals; i++) {
     const r = Math.floor(Math.random() * rows);
     const c = Math.floor(Math.random() * cols);
@@ -134,15 +137,14 @@ interface ExitDef { side: number; cellIndex: number; nx: number; ny: number; }
 
 function pickExits(cols: number, rows: number): ExitDef[] {
   const exits: ExitDef[] = [];
-  // Top exit
-  const topCol = 1 + Math.floor(Math.random() * (cols - 2));
-  exits.push({ side: 0, cellIndex: topCol, nx: (topCol + 0.5) / cols, ny: -0.02 });
-  // Right exit
-  const rightRow = 1 + Math.floor(Math.random() * (rows - 2));
-  exits.push({ side: 1, cellIndex: rightRow, nx: 1.02, ny: (rightRow + 0.5) / rows });
-  // Bottom exit
-  const botCol = 1 + Math.floor(Math.random() * (cols - 2));
-  exits.push({ side: 2, cellIndex: botCol, nx: (botCol + 0.5) / cols, ny: 1.02 });
+  const midCol = Math.floor(cols / 2);
+  const midRow = Math.floor(rows / 2);
+  // Top exit (center) — equidistant from ball start
+  exits.push({ side: 0, cellIndex: midCol, nx: (midCol + 0.5) / cols, ny: -0.02 });
+  // Right exit (middle) — equidistant from ball start
+  exits.push({ side: 1, cellIndex: midRow, nx: 1.02, ny: (midRow + 0.5) / rows });
+  // Bottom exit (center) — equidistant from ball start
+  exits.push({ side: 2, cellIndex: midCol, nx: (midCol + 0.5) / cols, ny: 1.02 });
   return exits;
 }
 
@@ -204,6 +206,9 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
   const wallsRef = useRef<WallSeg[]>([]);
   const goalsRef = useRef<GoalDef[]>([]);
+  const holesRef = useRef<HoleDef[]>([]);
+  const attemptsRef = useRef(0);
+  const [attempts, setAttempts] = useState(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { fetchPrizes().then((p) => { setPrizes(p); setPhase('ready'); }); }, []);
@@ -309,6 +314,60 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       color: GOAL_COLORS[i % GOAL_COLORS.length],
     }));
     goalsRef.current = goals;
+
+    // Generate trap holes in random cells
+    const holes: HoleDef[] = [];
+    const centerR = Math.floor(MAZE_ROWS / 2);
+    const centerC = Math.floor(MAZE_COLS / 2);
+    const exitCells = new Set<string>();
+    for (const exit of exits) {
+      if (exit.side === 0) exitCells.add(`0,${exit.cellIndex}`);
+      if (exit.side === 1) exitCells.add(`${exit.cellIndex},${MAZE_COLS - 1}`);
+      if (exit.side === 2) exitCells.add(`${MAZE_ROWS - 1},${exit.cellIndex}`);
+    }
+    const holeCount = 12 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < holeCount; i++) {
+      let r: number, c: number, tries = 0;
+      do {
+        r = Math.floor(Math.random() * MAZE_ROWS);
+        c = Math.floor(Math.random() * MAZE_COLS);
+        tries++;
+      } while (tries < 50 && (
+        (r === centerR && c === centerC) ||
+        exitCells.has(`${r},${c}`) ||
+        Math.abs(r - centerR) + Math.abs(c - centerC) <= 1 ||
+        holes.some(h => Math.abs(h.x - (c + 0.5) / MAZE_COLS) < 0.01 && Math.abs(h.y - (r + 0.5) / MAZE_ROWS) < 0.01)
+      ));
+      if (tries < 50) {
+        holes.push({ x: (c + 0.5) / MAZE_COLS, y: (r + 0.5) / MAZE_ROWS });
+      }
+    }
+
+    // Guardian holes near each exit — every exit path must go through obstacles
+    for (const exit of exits) {
+      let nearCells: [number, number][] = [];
+      if (exit.side === 0) { // top exit
+        const c = exit.cellIndex;
+        nearCells = [[1, c - 1], [1, c + 1], [2, c], [3, c - 1], [3, c + 1]];
+      } else if (exit.side === 1) { // right exit
+        const r = exit.cellIndex;
+        nearCells = [[r - 1, MAZE_COLS - 2], [r + 1, MAZE_COLS - 2], [r, MAZE_COLS - 3], [r - 1, MAZE_COLS - 4], [r + 1, MAZE_COLS - 4]];
+      } else if (exit.side === 2) { // bottom exit
+        const c = exit.cellIndex;
+        nearCells = [[MAZE_ROWS - 2, c - 1], [MAZE_ROWS - 2, c + 1], [MAZE_ROWS - 3, c], [MAZE_ROWS - 4, c - 1], [MAZE_ROWS - 4, c + 1]];
+      }
+      for (const [gr, gc] of nearCells) {
+        if (gr >= 0 && gr < MAZE_ROWS && gc >= 0 && gc < MAZE_COLS &&
+            !(gr === centerR && gc === centerC) &&
+            !exitCells.has(`${gr},${gc}`) &&
+            Math.abs(gr - centerR) + Math.abs(gc - centerC) > 2 &&
+            !holes.some(h => Math.abs(h.x - (gc + 0.5) / MAZE_COLS) < 0.01 && Math.abs(h.y - (gr + 0.5) / MAZE_ROWS) < 0.01)) {
+          holes.push({ x: (gc + 0.5) / MAZE_COLS, y: (gr + 0.5) / MAZE_ROWS });
+        }
+      }
+    }
+
+    holesRef.current = holes;
   }, [prizes]);
 
   const resetBall = useCallback(() => {
@@ -331,6 +390,8 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
     setElapsed(0);
     setWonPrize(null);
     setGameOver(false);
+    attemptsRef.current = 0;
+    setAttempts(0);
     tiltRef.current = { x: 0, y: 0 };
     startTimeRef.current = Date.now();
     setPhase('playing');
@@ -485,6 +546,21 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
         ctx.restore();
       }
 
+      /* ── Trap holes ── */
+      for (const hole of holesRef.current) {
+        const hp = toCanvas(hole.x, hole.y);
+        const hr = HOLE_RADIUS * dpr;
+        const holeGrad = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, hr);
+        holeGrad.addColorStop(0, 'rgba(0,0,0,0.9)');
+        holeGrad.addColorStop(0.7, 'rgba(0,0,0,0.6)');
+        holeGrad.addColorStop(1, 'rgba(180,40,40,0.3)');
+        ctx.fillStyle = holeGrad;
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, hr, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ef444460';
+        ctx.lineWidth = 2 * dpr;
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, hr, 0, Math.PI * 2); ctx.stroke();
+      }
+
       /* ── Physics (NO auto-assist) ── */
       if (touchActiveRef.current) updateTiltFromTouch();
 
@@ -528,6 +604,29 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
         }
       }
       if (hitWall) getSoundEngine().peg(Math.floor(Math.random() * 5));
+
+      // Hole collision — trap!
+      for (const hole of holesRef.current) {
+        const hp = toCanvas(hole.x, hole.y);
+        const hr = HOLE_RADIUS * dpr;
+        const hx = ball.x - hp.x, hy = ball.y - hp.y;
+        if (Math.sqrt(hx * hx + hy * hy) < hr * 0.7) {
+          try { getSoundEngine().miss(); } catch {}
+          attemptsRef.current++;
+          setAttempts(attemptsRef.current);
+          if (attemptsRef.current >= MAX_ATTEMPTS) {
+            const consolation = getConsolationPrize(prizes);
+            setWonPrize(consolation);
+            setGameOver(true);
+            setPhase('victory');
+            if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+            return;
+          }
+          resetBall();
+          animRef.current = requestAnimationFrame(loop);
+          return;
+        }
+      }
 
       // Time limit check
       const elapsedSec = Math.floor((Date.now() - startTimeRef.current) / 1000);
@@ -635,7 +734,12 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
       {/* HUD */}
       {phase === 'playing' && (
-        <div className="w-full max-w-[400px] flex items-center justify-center px-6 py-2 z-10" style={{ animation: 'fadeIn 0.3s ease-out both' }}>
+        <div className="w-full max-w-[400px] flex items-center justify-between px-6 py-2 z-10" style={{ animation: 'fadeIn 0.3s ease-out both' }}>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: MAX_ATTEMPTS }).map((_, i) => (
+              <span key={i} className="text-lg">{i < MAX_ATTEMPTS - attempts ? '🟡' : '✕'}</span>
+            ))}
+          </div>
           <div className="flex items-center gap-2">
             <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + '50' }} className="text-[11px] font-semibold uppercase tracking-wider">⏱</span>
             <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + 'aa' }} className="text-sm font-bold tabular-nums">{Math.max(0, TIME_LIMIT - elapsed)}s</span>
@@ -677,12 +781,12 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
             </h2>
             <p style={{ color: CREAM + '50' }} className="text-[13px] text-center max-w-[260px] leading-relaxed">
               {gameOver ? (
-                <>Temps écoulé… Pas de chance cette fois !</>
+                <>Pas de chance cette fois…</>
               ) : (
                 <>
-                  Un labyrinthe aléatoire vous attend.<br />
-                  Guidez la bille vers un des 3 cadeaux<br />
-                  en moins de {TIME_LIMIT} secondes !<br />
+                  Un labyrinthe complexe vous attend.<br />
+                  Évitez les trous et guidez la bille<br />
+                  vers un des 3 cadeaux ! {MAX_ATTEMPTS} vies.<br />
                   <span style={{ color: CREAM + '30' }} className="text-[11px]">Inclinez ou touchez pour diriger</span>
                 </>
               )}
