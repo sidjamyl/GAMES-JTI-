@@ -19,27 +19,42 @@ const PROXY = '/api/prizes';
 /* ── Global callback for WebDev → JS communication ── */
 declare global {
   interface Window {
-    receiveStock?: (json: string) => void;
+    receiveStock?: (json: string) => string;
     WL?: { Execute?: (...args: string[]) => void };
   }
 }
 
-/* ── Debug toast overlay ── */
-function showDebugToast(message: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') {
+/* ── Debug panel overlay — shows step-by-step log on screen ── */
+function getDebugPanel(): HTMLDivElement {
+  if (typeof document === 'undefined') return null as unknown as HTMLDivElement;
+  let panel = document.getElementById('wl-debug-panel') as HTMLDivElement | null;
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'wl-debug-panel';
+    Object.assign(panel.style, {
+      position: 'fixed', bottom: '0', left: '0', right: '0',
+      maxHeight: '40vh', overflowY: 'auto', zIndex: '99999',
+      background: 'rgba(0,0,0,0.85)', color: '#fff',
+      fontFamily: 'monospace', fontSize: '11px',
+      padding: '8px 12px', lineHeight: '1.6',
+      borderTop: '2px solid #f59e0b',
+    });
+    document.body.appendChild(panel);
+  }
+  return panel;
+}
+
+function debugLog(message: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') {
   if (typeof document === 'undefined') return;
-  const colors = { info: '#3b82f6', success: '#22c55e', error: '#ef4444', warn: '#f59e0b' };
-  const icons = { info: 'ℹ️', success: '✅', error: '❌', warn: '⚠️' };
-  const el = document.createElement('div');
-  el.textContent = `${icons[type]} ${message}`;
-  Object.assign(el.style, {
-    position: 'fixed', bottom: '0', left: '0', right: '0',
-    padding: '10px 16px', zIndex: '9999',
-    background: colors[type], color: '#fff',
-    fontFamily: 'monospace', fontSize: '11px',
-    textAlign: 'center', transition: 'opacity 0.5s',
-  });
-  document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 600); }, 4000);
+  const icons = { info: '🔵', success: '✅', error: '❌', warn: '⚠️' };
+  const colors = { info: '#93c5fd', success: '#86efac', error: '#fca5a5', warn: '#fde68a' };
+  const panel = getDebugPanel();
+  const line = document.createElement('div');
+  const time = new Date().toLocaleTimeString();
+  line.innerHTML = `<span style="color:#888">[${time}]</span> ${icons[type]} <span style="color:${colors[type]}">${message}</span>`;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+  console.log(`[WL-DEBUG] ${message}`);
 }
 
 /**
@@ -47,38 +62,44 @@ function showDebugToast(message: string, type: 'info' | 'success' | 'error' | 'w
  * otherwise fallback to the API proxy.
  */
 export async function fetchPrizes(): Promise<Prize[]> {
+  debugLog('fetchPrizes() démarré', 'info');
+
   // Try WebDev WL.Execute("STOCK") first
   if (typeof window !== 'undefined' && window.WL?.Execute) {
-    showDebugToast('WL détecté → appel WL.Execute("STOCK")...', 'info');
+    debugLog('WL détecté ✓ → appel WL.Execute("STOCK")...', 'info');
     try {
       const data = await fetchPrizesFromWebDev() as Record<string, unknown>;
+      debugLog('Réponse reçue de WebDev !', 'success');
       console.log('[PRIZES] Got stock from WebDev:', data);
       const list: Prize[] = Array.isArray(data) ? data : (data.prizes as Prize[]) ?? data;
       if (Array.isArray(list)) {
-        showDebugToast(`STOCK reçu ! ${list.length} produit(s) : ${list.map(p => p.name).join(', ')}`, 'success');
+        debugLog(`STOCK OK → ${list.length} produit(s) : ${list.map(p => `${p.name}(${p.quantity})`).join(', ')}`, 'success');
         return list;
       }
     } catch (e) {
       console.warn('[PRIZES] WebDev STOCK failed, falling back to API:', e);
-      showDebugToast(`STOCK échoué : ${e instanceof Error ? e.message : e}`, 'error');
+      debugLog(`STOCK échoué : ${e instanceof Error ? e.message : e}`, 'error');
     }
   } else if (typeof window !== 'undefined') {
-    showDebugToast('WL non détecté → fallback API proxy', 'warn');
+    debugLog('WL non détecté (hors WebDev) → fallback API', 'warn');
   }
 
   // Fallback: fetch via API proxy
-  console.log('[PRIZES] Using API proxy fallback');
+  debugLog('Appel API proxy /api/prizes...', 'info');
   const s = getSessionUserId();
   const qs = new URLSearchParams();
   if (s) qs.set('s', s);
 
   const res = await fetch(`${PROXY}?${qs}`);
-  if (!res.ok) throw new Error('Failed to fetch prizes');
+  if (!res.ok) {
+    debugLog(`API erreur HTTP ${res.status}`, 'error');
+    throw new Error('Failed to fetch prizes');
+  }
   const data = await res.json();
 
   const list: Prize[] = Array.isArray(data) ? data : data.prizes ?? data;
   if (!Array.isArray(list)) throw new Error('Unexpected prizes format');
-  showDebugToast(`API fallback : ${list.length} produit(s) reçus`, 'success');
+  debugLog(`API OK → ${list.length} produit(s) : ${list.map((p: Prize) => `${p.name}(${p.quantity})`).join(', ')}`, 'success');
   return list;
 }
 
@@ -88,24 +109,32 @@ export async function fetchPrizes(): Promise<Prize[]> {
  */
 function fetchPrizesFromWebDev(): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    debugLog('Attente réponse WebDev (timeout 5s)...', 'info');
+
     const timeout = setTimeout(() => {
       delete window.receiveStock;
+      debugLog('TIMEOUT — WebDev n\'a pas répondu en 5s', 'error');
       reject(new Error('STOCK timeout — WebDev did not respond in 5s'));
     }, 5000);
 
     // WebDev will call: ExécuteJS(HTM_ChampHTML, "window.receiveStock('...')")
-    window.receiveStock = (json: string) => {
+    window.receiveStock = (json: string): string => {
       clearTimeout(timeout);
-      delete window.receiveStock;
+      debugLog(`receiveStock() appelé ! Données reçues (${typeof json === 'string' ? json.length : '?'} chars)`, 'success');
       try {
         const data = typeof json === 'string' ? JSON.parse(json) : json;
+        delete window.receiveStock;
         resolve(data);
+        return 'OK - receiveStock reçu avec succès';
       } catch {
+        debugLog('Erreur parsing JSON du STOCK', 'error');
+        delete window.receiveStock;
         reject(new Error('Failed to parse STOCK response'));
+        return 'ERREUR - parsing JSON échoué';
       }
     };
 
-    console.log('[PRIZES] Calling WL.Execute("STOCK")...');
+    debugLog('→ WL.Execute("STOCK") envoyé !', 'info');
     window.WL!.Execute!('STOCK');
   });
 }
