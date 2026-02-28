@@ -120,17 +120,31 @@ function fetchPrizesFromWebDev(): Promise<unknown> {
     // WebDev will call: ExécuteJS(HTM_ChampHTML, "window.receiveStock('...')")
     window.receiveStock = (json: string): string => {
       clearTimeout(timeout);
-      debugLog(`receiveStock() appelé ! Données reçues (${typeof json === 'string' ? json.length : '?'} chars)`, 'success');
+      debugLog(`receiveStock() appelé ! Type: ${typeof json}, Longueur: ${typeof json === 'string' ? json.length : '?'}`, 'success');
+      debugLog(`Contenu brut: ${typeof json === 'string' ? json.substring(0, 200) : JSON.stringify(json)}`, 'info');
       try {
-        const data = typeof json === 'string' ? JSON.parse(json) : json;
+        let raw = json;
+        // Si c'est déjà un objet/array (pas une string), on le prend tel quel
+        if (typeof raw !== 'string') {
+          debugLog('Données reçues directement en objet', 'success');
+          delete window.receiveStock;
+          resolve(raw);
+          return 'OK';
+        }
+        // Nettoyer : retirer d'éventuels retours à la ligne, BOM, etc.
+        raw = raw.trim().replace(/^\uFEFF/, '');
+        const data = JSON.parse(raw);
+        debugLog(`Parse OK → ${Array.isArray(data) ? data.length + ' éléments' : typeof data}`, 'success');
         delete window.receiveStock;
         resolve(data);
         return 'OK - receiveStock reçu avec succès';
-      } catch {
-        debugLog('Erreur parsing JSON du STOCK', 'error');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        debugLog(`Erreur parsing JSON: ${msg}`, 'error');
+        debugLog(`Les 100 premiers chars: "${typeof json === 'string' ? json.substring(0, 100) : '???'}"`, 'error');
         delete window.receiveStock;
-        reject(new Error('Failed to parse STOCK response'));
-        return 'ERREUR - parsing JSON échoué';
+        reject(new Error('Failed to parse STOCK response: ' + msg));
+        return 'ERREUR - parsing JSON échoué: ' + msg;
       }
     };
 
