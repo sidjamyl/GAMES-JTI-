@@ -29,17 +29,61 @@ function getDebugPanel(): HTMLDivElement {
   if (typeof document === 'undefined') return null as unknown as HTMLDivElement;
   let panel = document.getElementById('wl-debug-panel') as HTMLDivElement | null;
   if (!panel) {
+    // Backdrop overlay
+    const backdrop = document.createElement('div');
+    backdrop.id = 'wl-debug-backdrop';
+    Object.assign(backdrop.style, {
+      position: 'fixed', inset: '0', zIndex: '99998',
+      background: 'rgba(0,0,0,0.5)',
+      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+    });
+    document.body.appendChild(backdrop);
+
+    // Dialog container
+    const dialog = document.createElement('div');
+    dialog.id = 'wl-debug-dialog';
+    Object.assign(dialog.style, {
+      position: 'fixed', top: '50%', left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '90vw', maxWidth: '500px', maxHeight: '70vh',
+      zIndex: '99999', borderRadius: '16px', overflow: 'hidden',
+      background: '#1a1a2e', color: '#fff',
+      fontFamily: 'monospace', fontSize: '11px',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      display: 'flex', flexDirection: 'column',
+    });
+    document.body.appendChild(dialog);
+
+    // Header
+    const header = document.createElement('div');
+    Object.assign(header.style, {
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '12px 16px', background: '#f59e0b', color: '#000',
+      fontWeight: 'bold', fontSize: '13px',
+    });
+    header.innerHTML = '🛠 Debug WL';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Fermer';
+    Object.assign(closeBtn.style, {
+      background: 'rgba(0,0,0,0.2)', border: 'none', color: '#000',
+      padding: '6px 14px', borderRadius: '8px', cursor: 'pointer',
+      fontWeight: 'bold', fontSize: '12px',
+    });
+    closeBtn.onclick = () => {
+      dialog.style.display = 'none';
+      backdrop.style.display = 'none';
+    };
+    header.appendChild(closeBtn);
+    dialog.appendChild(header);
+
+    // Log area
     panel = document.createElement('div');
     panel.id = 'wl-debug-panel';
     Object.assign(panel.style, {
-      position: 'fixed', bottom: '0', left: '0', right: '0',
-      maxHeight: '40vh', overflowY: 'auto', zIndex: '99999',
-      background: 'rgba(0,0,0,0.85)', color: '#fff',
-      fontFamily: 'monospace', fontSize: '11px',
-      padding: '8px 12px', lineHeight: '1.6',
-      borderTop: '2px solid #f59e0b',
+      flex: '1', overflowY: 'auto',
+      padding: '10px 14px', lineHeight: '1.7',
     });
-    document.body.appendChild(panel);
+    dialog.appendChild(panel);
   }
   return panel;
 }
@@ -51,7 +95,7 @@ function debugLog(message: string, type: 'info' | 'success' | 'error' | 'warn' =
   const panel = getDebugPanel();
   const line = document.createElement('div');
   const time = new Date().toLocaleTimeString();
-  line.innerHTML = `<span style="color:#888">[${time}]</span> ${icons[type]} <span style="color:${colors[type]}">${message}</span>`;
+  line.innerHTML = `<span style="color:#666">[${time}]</span> ${icons[type]} <span style="color:${colors[type]}">${message}</span>`;
   panel.appendChild(line);
   panel.scrollTop = panel.scrollHeight;
   console.log(`[WL-DEBUG] ${message}`);
