@@ -28,14 +28,14 @@ export default function VictoryScreen({
 
     /* ── Notify WinDev/WebDev: WL.Execute("GAIN", idGift, LibelleGift) ── */
     const idGift = String(prize.id);
-    const libelleGift = prize.name;
+   
 
     // WL is injected by WinDev/WebDev into the HTML control's JS context
     const win = window as unknown as { WL?: { Execute?: (...args: string[]) => void } };
     if (win?.WL?.Execute) {
-      win.WL.Execute('GAIN', idGift, libelleGift);
-      console.log('[GAME] WL.Execute called:', idGift, libelleGift);
-      setWlStatus(`✅ WL.Execute("GAIN", ${idGift}, "${libelleGift}") appelé !`);
+      win.WL.Execute('GAIN', idGift);
+      console.log('[GAME] WL.Execute called:', idGift);
+      setWlStatus(`✅ WL.Execute("GAIN", ${idGift}) appelé !`);
     } else {
       console.log('[GAME] WL.Execute not available (not in WinDev/WebDev context)');
       setWlStatus(`⚠️ WL.Execute non dispo (hors contexte WebDev)`);
