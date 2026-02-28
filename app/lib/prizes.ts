@@ -1,54 +1,48 @@
-import { Prize, PrizesResponse, ClaimPayload } from './types';
+import { Prize, ClaimPayload } from './types';
+import { getSessionUserId, getSessionSecondId } from './session';
 
 /* ═══════════════════════════════════════════════════════════
-   Mock data — swap USE_MOCK to false for real backend
+   Prizes — fetches via local proxy to avoid CORS
    ═══════════════════════════════════════════════════════════ */
 
-const MOCK_PRIZES: Prize[] = [
-  { name: 'Briquet', quantity: 10, emoji: '🔥' },
-  { name: 'AirPods', quantity: 2, emoji: '🎧' },
-  { name: 'Sacoche Banane', quantity: 5, emoji: '👜' },
-  { name: 'Enceinte Bluetooth', quantity: 3, emoji: '🔊' },
-  { name: 'Casquette', quantity: 8, emoji: '🧢' },
-  { name: 'Porte-clés', quantity: 15, emoji: '🔑' },
-];
-
-const USE_MOCK = true;
-const API_URL = process.env.NEXT_PUBLIC_PRIZES_API_URL || '/api/prizes';
+const PROXY = '/api/prizes';
 
 /*
- * ── Recommended JSON format ───────────────────────────────
+ * ── JSON formats ──────────────────────────────────────────
  *
- * GET response:
- * {
- *   "prizes": [
- *     { "name": "Briquet", "quantity": 10, "emoji": "🔥" },
- *     { "name": "AirPods", "quantity": 2, "emoji": "🎧" }
- *   ]
- * }
+ * GET response (from external API):
+ * [
+ *   { "id": 1, "name": "Briquet", "quantity": 10, "emoji": "🔥" },
+ *   { "id": 2, "name": "AirPods", "quantity": 2, "emoji": "🎧" }
+ * ]
  *
- * POST body:
- * { "prize": "AirPods", "quantity": 1 }
+ * POST body (sent to external API):
+ * { "id": 2, "quantity": 1, "gid": "20" }
  */
 
 export async function fetchPrizes(): Promise<Prize[]> {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 300));
-    return MOCK_PRIZES.map((p) => ({ ...p }));
-  }
-  const res = await fetch(API_URL);
+  const s = getSessionUserId();
+  const qs = new URLSearchParams();
+  if (s) qs.set('s', s);
+
+  const res = await fetch(`${PROXY}?${qs}`);
   if (!res.ok) throw new Error('Failed to fetch prizes');
-  const data: PrizesResponse = await res.json();
-  return data.prizes;
+  const data = await res.json();
+
+  /* Handle both { prizes: [...] } and raw array responses */
+  const list: Prize[] = Array.isArray(data) ? data : data.prizes ?? data;
+  if (!Array.isArray(list)) throw new Error('Unexpected prizes format');
+  return list;
 }
 
-export async function claimPrize(prizeName: string): Promise<void> {
-  const payload: ClaimPayload = { prize: prizeName, quantity: 1 };
-  if (USE_MOCK) {
-    console.log('[MOCK] Prize claimed:', payload);
-    return;
-  }
-  await fetch(API_URL, {
+export async function claimPrize(prizeId: number): Promise<void> {
+  const s = getSessionUserId();
+  const g = getSessionSecondId();
+  const qs = new URLSearchParams();
+  if (s) qs.set('s', s);
+
+  const payload: ClaimPayload = { id: prizeId, quantity: 1, ...(g && { gid: g }) };
+  await fetch(`${PROXY}?${qs}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
