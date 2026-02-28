@@ -19,7 +19,7 @@ const PROXY = '/api/prizes';
 /* ── Global callback for WebDev → JS communication ── */
 declare global {
   interface Window {
-    receiveStock?: (json: string) => string;
+    receiveStock?: (data: string) => string;
     WL?: { Execute?: (...args: string[]) => void };
   }
 }
@@ -117,34 +117,44 @@ function fetchPrizesFromWebDev(): Promise<unknown> {
       reject(new Error('STOCK timeout — WebDev did not respond in 5s'));
     }, 5000);
 
-    // WebDev will call: ExécuteJS(HTM_ChampHTML, "window.receiveStock('...')")
-    window.receiveStock = (json: string): string => {
+    // WebDev will call: ExécuteJS(HTM_ChampHTML, "window.receiveStock('id;name;qty;emoji*id;name;qty;emoji')")
+    window.receiveStock = (raw: string): string => {
       clearTimeout(timeout);
-      debugLog(`receiveStock() appelé ! Type: ${typeof json}, Longueur: ${typeof json === 'string' ? json.length : '?'}`, 'success');
-      debugLog(`Contenu brut: ${typeof json === 'string' ? json.substring(0, 200) : JSON.stringify(json)}`, 'info');
+      debugLog(`receiveStock() appelé ! Type: ${typeof raw}, Longueur: ${typeof raw === 'string' ? raw.length : '?'}`, 'success');
+      debugLog(`Contenu brut: ${typeof raw === 'string' ? raw.substring(0, 300) : JSON.stringify(raw)}`, 'info');
       try {
-        let raw = json;
-        // Si c'est déjà un objet/array (pas une string), on le prend tel quel
-        if (typeof raw !== 'string') {
-          debugLog('Données reçues directement en objet', 'success');
+        if (typeof raw !== 'string' || !raw.trim()) {
+          debugLog('Données vides ou non-string', 'error');
           delete window.receiveStock;
-          resolve(raw);
-          return 'OK';
+          reject(new Error('receiveStock: données vides'));
+          return 'ERREUR - données vides';
         }
-        // Nettoyer : retirer d'éventuels retours à la ligne, BOM, etc.
-        raw = raw.trim().replace(/^\uFEFF/, '');
-        const data = JSON.parse(raw);
-        debugLog(`Parse OK → ${Array.isArray(data) ? data.length + ' éléments' : typeof data}`, 'success');
+
+        // Parse format: id;name;quantity;emoji  séparés par *
+        const lines = raw.trim().split('*').filter(l => l.length > 0);
+        debugLog(`${lines.length} ligne(s) détectée(s)`, 'info');
+
+        const prizes: Prize[] = lines.map((line, i) => {
+          const parts = line.split(';');
+          debugLog(`  Ligne ${i + 1}: [${parts.join(' | ')}]`, 'info');
+          return {
+            id: parseInt(parts[0], 10) || 0,
+            name: parts[1] || 'Inconnu',
+            quantity: parseInt(parts[2], 10) || 0,
+            emoji: parts[3] || '🧢',
+          };
+        });
+
+        debugLog(`Parse OK → ${prizes.length} produit(s) : ${prizes.map(p => `${p.name}(${p.quantity})`).join(', ')}`, 'success');
         delete window.receiveStock;
-        resolve(data);
-        return 'OK - receiveStock reçu avec succès';
+        resolve(prizes);
+        return 'OK - ' + prizes.length + ' produits reçus';
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        debugLog(`Erreur parsing JSON: ${msg}`, 'error');
-        debugLog(`Les 100 premiers chars: "${typeof json === 'string' ? json.substring(0, 100) : '???'}"`, 'error');
+        debugLog(`Erreur parsing: ${msg}`, 'error');
         delete window.receiveStock;
-        reject(new Error('Failed to parse STOCK response: ' + msg));
-        return 'ERREUR - parsing JSON échoué: ' + msg;
+        reject(new Error('Failed to parse STOCK: ' + msg));
+        return 'ERREUR - ' + msg;
       }
     };
 
