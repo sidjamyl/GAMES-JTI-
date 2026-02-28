@@ -20,37 +20,25 @@ export default function VictoryScreen({
   accentTo = '#c9842b',
 }: Props) {
   const [visible, setVisible] = useState(false);
+  const [wlStatus, setWlStatus] = useState<string>('');
 
   useEffect(() => {
     getSoundEngine().victory();
     claimPrize(prize.id);
 
-    /* ── Notify WebDev parent: WL.Exécute("GAIN", idGift, LibelleGift) ── */
-    try {
-      const idGift = String(prize.id);
-      const libelleGift = prize.name;
-      console.log('[GAME] Calling WebDev GAIN:', idGift, libelleGift);
+    /* ── Notify WinDev/WebDev: WL.Execute("GAIN", idGift, LibelleGift) ── */
+    const idGift = String(prize.id);
+    const libelleGift = prize.name;
 
-      // Try direct call (works if HTML field is inline, not sandboxed iframe)
-      const parentWin = window.parent as unknown as { WL?: { Exécute?: (...args: string[]) => void } };
-      if (parentWin?.WL?.Exécute) {
-        parentWin.WL.Exécute();
-        console.log('[GAME] WL.Exécute called directly');
-      } else {
-        // Fallback: postMessage so WebDev can listen and call WL.Exécute
-        window.parent.postMessage(
-          { type: 'PRIZE_WON', action: 'GAIN', idGift, libelleGift },
-          '*',
-        );
-        console.log('[GAME] postMessage sent to parent');
-      }
-    } catch (e) {
-      // Cross-origin: direct access blocked, use postMessage
-      window.parent.postMessage(
-        { type: 'PRIZE_WON', action: 'GAIN', idGift: String(prize.id), libelleGift: prize.name },
-        '*',
-      );
-      console.log('[GAME] postMessage fallback (cross-origin):', e);
+    // WL is injected by WinDev/WebDev into the HTML control's JS context
+    const win = window as unknown as { WL?: { Execute?: (...args: string[]) => void } };
+    if (win?.WL?.Execute) {
+      win.WL.Execute('GAIN', idGift, libelleGift);
+      console.log('[GAME] WL.Execute called:', idGift, libelleGift);
+      setWlStatus(`✅ WL.Execute("GAIN", ${idGift}, "${libelleGift}") appelé !`);
+    } else {
+      console.log('[GAME] WL.Execute not available (not in WinDev/WebDev context)');
+      setWlStatus(`⚠️ WL.Execute non dispo (hors contexte WebDev)`);
     }
 
     requestAnimationFrame(() => setVisible(true));
@@ -144,6 +132,20 @@ export default function VictoryScreen({
             >
               Revenir demain 👋
             </button>
+          )}
+
+          {/* Debug: WL.Execute status */}
+          {wlStatus && (
+            <div
+              className="mt-2 w-full text-center text-xs font-mono px-3 py-2 rounded-xl"
+              style={{
+                background: wlStatus.startsWith('✅') ? '#d4edda' : '#fff3cd',
+                color: wlStatus.startsWith('✅') ? '#155724' : '#856404',
+                border: `1px solid ${wlStatus.startsWith('✅') ? '#c3e6cb' : '#ffc107'}`,
+              }}
+            >
+              {wlStatus}
+            </div>
           )}
         </div>
       </div>
