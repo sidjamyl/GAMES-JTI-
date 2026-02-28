@@ -24,8 +24,37 @@ export default function VictoryScreen({
   useEffect(() => {
     getSoundEngine().victory();
     claimPrize(prize.id);
+
+    /* ── Notify WebDev parent: WL.Exécute("GAIN", idGift, LibelleGift) ── */
+    try {
+      const idGift = String(prize.id);
+      const libelleGift = prize.name;
+      console.log('[GAME] Calling WebDev GAIN:', idGift, libelleGift);
+
+      // Try direct call (works if HTML field is inline, not sandboxed iframe)
+      const parentWin = window.parent as unknown as { WL?: { Exécute?: (...args: string[]) => void } };
+      if (parentWin?.WL?.Exécute) {
+        parentWin.WL.Exécute('GAIN', idGift, libelleGift);
+        console.log('[GAME] WL.Exécute called directly');
+      } else {
+        // Fallback: postMessage so WebDev can listen and call WL.Exécute
+        window.parent.postMessage(
+          { type: 'PRIZE_WON', action: 'GAIN', idGift, libelleGift },
+          '*',
+        );
+        console.log('[GAME] postMessage sent to parent');
+      }
+    } catch (e) {
+      // Cross-origin: direct access blocked, use postMessage
+      window.parent.postMessage(
+        { type: 'PRIZE_WON', action: 'GAIN', idGift: String(prize.id), libelleGift: prize.name },
+        '*',
+      );
+      console.log('[GAME] postMessage fallback (cross-origin):', e);
+    }
+
     requestAnimationFrame(() => setVisible(true));
-  }, [prize.id]);
+  }, [prize.id, prize.name]);
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center">
