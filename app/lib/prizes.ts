@@ -24,6 +24,24 @@ declare global {
   }
 }
 
+/* ── Debug toast overlay ── */
+function showDebugToast(message: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') {
+  if (typeof document === 'undefined') return;
+  const colors = { info: '#3b82f6', success: '#22c55e', error: '#ef4444', warn: '#f59e0b' };
+  const icons = { info: 'ℹ️', success: '✅', error: '❌', warn: '⚠️' };
+  const el = document.createElement('div');
+  el.textContent = `${icons[type]} ${message}`;
+  Object.assign(el.style, {
+    position: 'fixed', bottom: '0', left: '0', right: '0',
+    padding: '10px 16px', zIndex: '9999',
+    background: colors[type], color: '#fff',
+    fontFamily: 'monospace', fontSize: '11px',
+    textAlign: 'center', transition: 'opacity 0.5s',
+  });
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 600); }, 4000);
+}
+
 /**
  * Fetch prizes via WL.Execute("STOCK") if in WebDev context,
  * otherwise fallback to the API proxy.
@@ -31,14 +49,21 @@ declare global {
 export async function fetchPrizes(): Promise<Prize[]> {
   // Try WebDev WL.Execute("STOCK") first
   if (typeof window !== 'undefined' && window.WL?.Execute) {
+    showDebugToast('WL détecté → appel WL.Execute("STOCK")...', 'info');
     try {
       const data = await fetchPrizesFromWebDev() as Record<string, unknown>;
       console.log('[PRIZES] Got stock from WebDev:', data);
       const list: Prize[] = Array.isArray(data) ? data : (data.prizes as Prize[]) ?? data;
-      if (Array.isArray(list)) return list;
+      if (Array.isArray(list)) {
+        showDebugToast(`STOCK reçu ! ${list.length} produit(s) : ${list.map(p => p.name).join(', ')}`, 'success');
+        return list;
+      }
     } catch (e) {
       console.warn('[PRIZES] WebDev STOCK failed, falling back to API:', e);
+      showDebugToast(`STOCK échoué : ${e instanceof Error ? e.message : e}`, 'error');
     }
+  } else if (typeof window !== 'undefined') {
+    showDebugToast('WL non détecté → fallback API proxy', 'warn');
   }
 
   // Fallback: fetch via API proxy
@@ -53,6 +78,7 @@ export async function fetchPrizes(): Promise<Prize[]> {
 
   const list: Prize[] = Array.isArray(data) ? data : data.prizes ?? data;
   if (!Array.isArray(list)) throw new Error('Unexpected prizes format');
+  showDebugToast(`API fallback : ${list.length} produit(s) reçus`, 'success');
   return list;
 }
 
