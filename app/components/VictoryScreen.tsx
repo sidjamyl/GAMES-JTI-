@@ -34,7 +34,7 @@ export default function VictoryScreen({
       // Try direct call (works if HTML field is inline, not sandboxed iframe)
       const parentWin = window.parent as unknown as { WL?: { Exécute?: (...args: string[]) => void } };
       if (parentWin?.WL?.Exécute) {
-        parentWin.WL.Exécute('GAIN', idGift, libelleGift);
+        parentWin.WL.Exécute();
         console.log('[GAME] WL.Exécute called directly');
       } else {
         // Fallback: postMessage so WebDev can listen and call WL.Exécute
