@@ -55,7 +55,7 @@ interface BallState {
   stillFrames: number;
 }
 
-/* ── Dense grid layout generation ── */
+/* ── Layout generation — smaller boxes at random positions ── */
 function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   cups: Cup[];
   obstacles: Obstacle[];
@@ -65,72 +65,82 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const platforms: PlatformDef[] = [];
   const obstacles: Obstacle[] = [];
 
-  // Dense grid layout — always DISPLAY_SLOTS cups with proportional prizes
+  // Proportional prize distribution
   const displaySlots = getDisplaySlots('angry-ball');
   const distributed = shuffle(distributeProportionally(allPrizes, displaySlots));
   const total = Math.max(1, distributed.length);
-  const cols = Math.min(total, Math.max(2, Math.ceil(Math.sqrt(total))));
-  const rows = Math.ceil(total / cols);
-  const cupW = Math.min(0.085, 0.7 / cols);
-  const cupH = Math.min(0.095, 0.4 / rows);
-  const startX = 0.35;
-  const endX = 0.88;
-  const startY = total <= 3 ? 0.45 : 0.30;
-  const endY = total <= 3 ? 0.45 : 0.70;
-  const spacingX = cols > 1 ? (endX - startX) / (cols - 1) : 0;
-  const spacingY = rows > 1 ? (endY - startY) / (rows - 1) : 0;
 
-  // Use proportionally distributed prizes
-  const usedPrizes = distributed;
+  // Smaller, fixed cup size
+  const cupW = 0.055;
+  const cupH = 0.065;
 
-  let idx = 0;
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      if (idx >= total) break;
-      // Slight random offset for organic feel
-      const jitterX = (Math.random() - 0.5) * 0.025;
-      const jitterY = (Math.random() - 0.5) * 0.02;
-      const x = startX + col * spacingX + jitterX;
-      const y = startY + row * spacingY + jitterY;
+  // Random placement zone (right 2/3 of screen)
+  const zoneMinX = 0.30;
+  const zoneMaxX = 0.90;
+  const zoneMinY = 0.18;
+  const zoneMaxY = 0.72;
+  const minDist = 0.12; // minimum distance between cup centers
 
-      cups.push({
-        x, y,
-        w: cupW + (Math.random() - 0.5) * 0.008,
-        h: cupH + (Math.random() - 0.5) * 0.008,
-        color: cupColors[idx % cupColors.length],
-        prize: usedPrizes[idx],
-      });
-
-      platforms.push({
-        x,
-        y: y + cupH + 0.008,
-        w: cupW + 0.04,
-      });
-      idx++;
+  // Place cups at random non-overlapping positions
+  for (let i = 0; i < total; i++) {
+    let bestX = 0, bestY = 0;
+    let placed = false;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const cx = zoneMinX + Math.random() * (zoneMaxX - zoneMinX);
+      const cy = zoneMinY + Math.random() * (zoneMaxY - zoneMinY);
+      const tooClose = cups.some(c =>
+        Math.hypot(c.x - cx, c.y - cy) < minDist
+      );
+      if (!tooClose) {
+        bestX = cx;
+        bestY = cy;
+        placed = true;
+        break;
+      }
     }
+    if (!placed) {
+      // Fallback: slight offset from last cup
+      bestX = zoneMinX + Math.random() * (zoneMaxX - zoneMinX);
+      bestY = zoneMinY + Math.random() * (zoneMaxY - zoneMinY);
+    }
+
+    cups.push({
+      x: bestX,
+      y: bestY,
+      w: cupW + (Math.random() - 0.5) * 0.006,
+      h: cupH + (Math.random() - 0.5) * 0.006,
+      color: cupColors[i % cupColors.length],
+      prize: distributed[i] ?? null,
+    });
+
+    platforms.push({
+      x: bestX,
+      y: bestY + cupH + 0.008,
+      w: cupW + 0.03,
+    });
   }
 
-  // Light obstacles for a fair challenge
-  const numObs = 2 + Math.floor(Math.random() * 2);
+  // More obstacles for a real challenge (6-10)
+  const numObs = 6 + Math.floor(Math.random() * 5);
   for (let i = 0; i < numObs; i++) {
     const isVertical = Math.random() > 0.5;
     let ox: number, oy: number;
     let tries = 0;
 
     do {
-      ox = 0.20 + Math.random() * 0.65; // obstacles spread across the play field
-      oy = 0.15 + Math.random() * 0.65;
+      ox = 0.18 + Math.random() * 0.70;
+      oy = 0.12 + Math.random() * 0.70;
       tries++;
     } while (
-      tries < 40 &&
-      cups.some(c => Math.abs(c.x - ox) < 0.10 && Math.abs(c.y - oy) < 0.12)
+      tries < 50 &&
+      cups.some(c => Math.abs(c.x - ox) < 0.08 && Math.abs(c.y - oy) < 0.09)
     );
 
     obstacles.push({
       x: ox,
       y: oy,
-      w: isVertical ? 0.025 + Math.random() * 0.010 : 0.070 + Math.random() * 0.035,
-      h: isVertical ? 0.14 + Math.random() * 0.08 : 0.022 + Math.random() * 0.010,
+      w: isVertical ? 0.020 + Math.random() * 0.012 : 0.065 + Math.random() * 0.050,
+      h: isVertical ? 0.12 + Math.random() * 0.10 : 0.018 + Math.random() * 0.012,
     });
   }
 
@@ -353,13 +363,24 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           ctx.stroke();
         }
 
-        // Prize emoji
+        // Prize visible inside the box — emoji + name
         if (cup.prize) {
-          ctx.font = `${Math.min(14, cupW * 0.5) * dpr}px serif`;
+          // Emoji — large and clear
+          const emojiSize = Math.min(18, cupW * 0.65);
+          ctx.font = `${emojiSize * dpr}px serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.globalAlpha = 0.7;
-          ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.45);
+          ctx.globalAlpha = 0.95;
+          ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.35);
+
+          // Prize name — small text below emoji
+          const nameSize = Math.max(6, Math.min(9, cupW * 0.22));
+          ctx.font = `bold ${nameSize * dpr}px sans-serif`;
+          ctx.fillStyle = CREAM + 'cc';
+          const label = cup.prize.name.length > 10
+            ? cup.prize.name.slice(0, 9) + '…'
+            : cup.prize.name;
+          ctx.fillText(label, cp.x, cp.y + cupH * 0.72);
           ctx.globalAlpha = 1;
         }
       }
