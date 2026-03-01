@@ -11,7 +11,7 @@ export const DEFAULT_DISPLAY_SLOTS = 5;
 export const GAME_DISPLAY_SLOTS: Record<string, number> = {
   plinko: 10,
   cannon: 6,
-  pendulum: 10,
+  pendulum: 6,
   'angry-ball': 6,
   // 'gyro-maze': 10,
   // 'gift-slice': 10,
