@@ -85,18 +85,16 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
   }, []);
 
   const computeGeometry = useCallback((w: number, h: number) => {
-    // Slot count = exactly the number of available prizes
-    const available = prizes.filter(p => p.quantity > 0);
-    const slotCount = Math.max(2, available.length);
-    const pegCols = slotCount - 1;
-
+    const TARGET_SPACING = 40;
     const boardPadding = PEG_RADIUS + 4;
     const boardWidth = w - boardPadding * 2;
     const boardTop = h * 0.12;
     const boardBottom = h * 0.78;
     const boardHeight = boardBottom - boardTop;
 
-    const pegRows = Math.max(BASE_PEG_ROWS, Math.round(boardHeight / (boardWidth / (pegCols - 1 || 1))));
+    const pegCols = Math.max(BASE_PEG_COLS, Math.round(boardWidth / TARGET_SPACING));
+    const pegRows = Math.max(BASE_PEG_ROWS, Math.round(boardHeight / TARGET_SPACING));
+    const slotCount = pegCols + 1;
     gridRef.current = { pegRows, pegCols, slotCount };
 
     const pegSpacingX = boardWidth / (pegCols - 1);
@@ -119,7 +117,7 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       }
     }
     pegsRef.current = pegs;
-  }, [prizes]);
+  }, []);
 
   const resize = useCallback(() => {
     const canvas = canvasRef.current;
@@ -167,12 +165,29 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     };
   }, []);
 
-  // 1 slot = 1 prize (exact match)
+  // Distribute prizes randomly across slots — exactly N prizes placed, rest empty
   const assignSlotPrizes = useCallback(() => {
+    const { slotCount } = gridRef.current;
     const available = prizes.filter(p => p.quantity > 0);
     if (available.length === 0) return;
-    setSlotPrizes(available);
-    slotPrizesRef.current = available;
+
+    // Build array of slot indices and shuffle
+    const indices = Array.from({ length: slotCount }, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+
+    const slots: (Prize | null)[] = new Array(slotCount).fill(null);
+    // Place each prize in a unique random slot
+    available.forEach((prize, idx) => {
+      if (idx < slotCount) {
+        slots[indices[idx]] = prize;
+      }
+    });
+
+    setSlotPrizes(slots);
+    slotPrizesRef.current = slots;
   }, [prizes]);
 
   const dropBall = useCallback(
