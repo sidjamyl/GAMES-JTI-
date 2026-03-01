@@ -427,20 +427,11 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
         calibrationRef.current = { beta, gamma, calibrated: true };
       }
       const cal = calibrationRef.current;
-      const rawGamma = (gamma - cal.gamma) / 25;
-      const rawBeta = (beta - cal.beta) / 25;
-      // In landscape mode (tablet held horizontally), axes are swapped:
-      // gamma = forward/backward tilt (maps to Y), beta = left/right tilt (maps to X)
-      const isLandscape = window.innerWidth > window.innerHeight;
-      let dx: number, dy: number;
-      if (isLandscape) {
-        // Landscape: beta controls X (left/right), gamma controls Y (forward/back)
-        dx = Math.max(-1, Math.min(1, rawBeta));
-        dy = Math.max(-1, Math.min(1, -rawGamma));
-      } else {
-        dx = Math.max(-1, Math.min(1, rawGamma));
-        dy = Math.max(-1, Math.min(1, rawBeta));
-      }
+      const rawGamma = (gamma - cal.gamma) / 20;
+      const rawBeta = (beta - cal.beta) / 20;
+      // gamma = left-right tilt → X, beta = forward-back tilt → Y
+      const dx = Math.max(-1, Math.min(1, rawGamma));
+      const dy = Math.max(-1, Math.min(1, rawBeta));
       tiltRef.current = { x: dx, y: dy };
     };
     window.addEventListener('deviceorientation', handle);

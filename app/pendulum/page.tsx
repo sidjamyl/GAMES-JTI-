@@ -551,22 +551,18 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       ctx.fillRect(w - 5, conveyorY - 5, 5, beltH + 28);
 
       /* ── CONVEYOR ITEMS ── */
-      const isDropping = pend.dropping || pend.retracting;
       for (const item of conveyorRef.current) {
         if (item.grabbed) continue; // skip grabbed items
-        // Freeze gift movement while claw is dropping/retracting
-        if (!isDropping) {
-          // Random movement — gifts change direction unpredictably
-          item.dirTimer -= dt;
-          if (item.dirTimer <= 0) {
-            item.vx = (Math.random() > 0.5 ? 1 : -1) * (2.5 + Math.random() * 3.5);
-            item.dirTimer = 12 + Math.floor(Math.random() * 30);
-          }
-          item.x += item.vx * dt;
-          // Bounce off edges
-          if (item.x < item.size) { item.x = item.size; item.vx = Math.abs(item.vx); }
-          if (item.x > w - item.size) { item.x = w - item.size; item.vx = -Math.abs(item.vx); }
+        // Random movement — gifts change direction unpredictably
+        item.dirTimer -= dt;
+        if (item.dirTimer <= 0) {
+          item.vx = (Math.random() > 0.5 ? 1 : -1) * (2.5 + Math.random() * 3.5);
+          item.dirTimer = 12 + Math.floor(Math.random() * 30);
         }
+        item.x += item.vx * dt;
+        // Bounce off edges
+        if (item.x < item.size) { item.x = item.size; item.vx = Math.abs(item.vx); }
+        if (item.x > w - item.size) { item.x = w - item.size; item.vx = -Math.abs(item.vx); }
 
         const s = item.size;
         const bob = Math.sin(timeRef.current * 0.035 + item.bobPhase) * 2;

@@ -203,7 +203,7 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
 export default function AngryBall({ theme }: { theme?: GameTheme }) {
   const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
   const goldRgb = hexToRgb(GOLD);
-  const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#ef4444'];
+  const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#b45309'];
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<GamePhase>('loading');
@@ -418,22 +418,27 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           ctx.stroke();
         }
 
-        // Prize visible inside the box — emoji + name
+        // Prize emoji inside the cup — large and bright
         if (cup.prize) {
-          // Emoji — large and clear
-          const emojiSize = Math.min(18, cupW * 0.65);
+          const emojiSize = Math.min(24, cupW * 0.8);
           ctx.font = `${emojiSize * dpr}px serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.globalAlpha = 0.95;
-          ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.35);
+          ctx.fillStyle = '#ffffff';
           ctx.globalAlpha = 1;
+          ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.4);
         }
       }
 
-      /* ── Obstacles — BRIGHT and VISIBLE walls ── */
-      for (const obs of obstaclesRef.current) {
+      /* ── Obstacles — BRIGHT and VISIBLE walls (oscillating) ── */
+      for (let oi = 0; oi < obstaclesRef.current.length; oi++) {
+        const obs = obstaclesRef.current[oi];
         const op = toGame(obs.x, obs.y);
+        // Oscillate obstacles vertically like cannon
+        const oscAmp = (12 + (oi % 3) * 6) * dpr;
+        const oscSpeed = 0.5 + (oi % 4) * 0.2;
+        const oscOffset = Math.sin(time * oscSpeed + oi * 2.1) * oscAmp;
+        op.y += oscOffset;
         const ow = obs.w * g.w;
         const oh = obs.h * g.h;
 
@@ -553,9 +558,14 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           if (Math.abs(ball.vy) < 1 * dpr) ball.vy = 0;
         }
 
-        // Obstacle collisions — proper restitution
-        for (const obs of obstaclesRef.current) {
+        // Obstacle collisions — oscillating positions (must match rendering)
+        for (let oi = 0; oi < obstaclesRef.current.length; oi++) {
+          const obs = obstaclesRef.current[oi];
           const op = toGame(obs.x, obs.y);
+          const oscAmp = (12 + (oi % 3) * 6) * dpr;
+          const oscSpeed = 0.5 + (oi % 4) * 0.2;
+          const oscOffset = Math.sin(time * oscSpeed + oi * 2.1) * oscAmp;
+          op.y += oscOffset;
           const ow = obs.w * g.w;
           const oh = obs.h * g.h;
           const left = op.x - ow / 2, right = op.x + ow / 2;
@@ -632,52 +642,57 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           }
         }
 
-        // Cup detection — proper collision with SIDE HITBOXES
+        // Cup collision — 3 walls (left, right, bottom) + open top entry
         for (const cup of cupsRef.current) {
           const cp = toGame(cup.x, cup.y);
-          const cupW = cup.w * g.w;
-          const cupH = cup.h * g.h;
-          const cupLeft = cp.x - cupW / 2;
-          const cupRight = cp.x + cupW / 2;
-          const cupTop = cp.y;
-          const cupBottom = cp.y + cupH;
-          const wallThick = 5 * dpr;
+          const cupPxW = cup.w * g.w;
+          const cupPxH = cup.h * g.h;
+          const cLeft = cp.x - cupPxW / 2;
+          const cRight = cp.x + cupPxW / 2;
+          const cTop = cp.y;
+          const cBottom = cp.y + cupPxH;
+          const wt = 4 * dpr;
 
-          // ── OUTER side hitbox: bounce the ball off cup walls from outside ──
-          // Left wall (full height)
-          if (ball.y + br > cupTop - 2 * dpr && ball.y - br < cupBottom) {
-            // Approaching left wall from outside
-            if (ball.x + br > cupLeft - wallThick && ball.x + br < cupLeft + wallThick && ball.vx > 0
-                && !(ball.x > cupLeft + br * 0.3 && ball.x < cupRight - br * 0.3 && ball.y < cupTop + br)) {
-              ball.x = cupLeft - wallThick - br;
-              ball.vx = -Math.abs(ball.vx) * BOUNCE;
+          // 3 wall AABBs: left, right, bottom
+          const cupWalls = [
+            { l: cLeft - wt, r: cLeft, t: cTop, b: cBottom },
+            { l: cRight, r: cRight + wt, t: cTop, b: cBottom },
+            { l: cLeft - wt, r: cRight + wt, t: cBottom, b: cBottom + wt },
+          ];
+
+          let hitCupWall = false;
+          for (const wall of cupWalls) {
+            const nearX = Math.max(wall.l, Math.min(wall.r, ball.x));
+            const nearY = Math.max(wall.t, Math.min(wall.b, ball.y));
+            const ddx = ball.x - nearX, ddy = ball.y - nearY;
+            const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+            if (dist < br && dist > 0) {
+              const nx = ddx / dist, ny = ddy / dist;
+              ball.x += nx * (br - dist);
+              ball.y += ny * (br - dist);
+              const dot = ball.vx * nx + ball.vy * ny;
+              if (dot < 0) {
+                ball.vx -= (1 + RESTITUTION) * dot * nx;
+                ball.vy -= (1 + RESTITUTION) * dot * ny;
+              }
               getSoundEngine().peg(0);
-              continue; // skip inner checks for this cup
-            }
-            // Approaching right wall from outside
-            if (ball.x - br < cupRight + wallThick && ball.x - br > cupRight - wallThick && ball.vx < 0
-                && !(ball.x > cupLeft + br * 0.3 && ball.x < cupRight - br * 0.3 && ball.y < cupTop + br)) {
-              ball.x = cupRight + wallThick + br;
-              ball.vx = Math.abs(ball.vx) * BOUNCE;
-              getSoundEngine().peg(0);
-              continue;
+              hitCupWall = true;
             }
           }
 
-          // ── Enter cup from the top — must be falling and within the opening ──
-          if (ball.x > cupLeft + br * 0.15 && ball.x < cupRight - br * 0.15 &&
-              ball.y + br > cupTop && ball.y < cupBottom && ball.vy > 0) {
-            // Slow the ball inside the cup
-            ball.vx *= 0.85;
-            ball.vy *= 0.85;
+          // Ball settling inside cup — open top entry
+          if (!hitCupWall && !ball.landed &&
+              ball.x > cLeft + br * 0.2 && ball.x < cRight - br * 0.2 &&
+              ball.y > cTop && ball.y + br < cBottom + wt) {
+            ball.vx *= 0.82;
+            ball.vy *= 0.82;
             if (Math.abs(ball.vy) < 2 * dpr && Math.abs(ball.vx) < 2 * dpr) {
               ball.landed = true;
               ball.x = cp.x;
-              ball.y = cupTop + cupH * 0.45;
+              ball.y = cTop + cupPxH * 0.45;
               ball.vx = 0; ball.vy = 0;
               getSoundEngine().swish();
 
-              // Any cup = WIN that cup's prize
               setShowLanded(true);
               setTimeout(() => setShowLanded(false), 1000);
               if (cup.prize) {
@@ -685,29 +700,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
                 setTimeout(() => { if (phaseRef.current === 'playing') setPhase('victory'); }, 1200);
               }
             }
-          }
-
-          // ── Inner wall collisions (ball already inside cup) ──
-          if (ball.y > cupTop + br * 0.5 && ball.y < cupBottom) {
-            if (ball.x + br > cupLeft && ball.x + br < cupLeft + wallThick + br && ball.vx > 0) {
-              ball.x = cupLeft - br;
-              const dot = ball.vx;
-              ball.vx = -Math.abs(dot) * BOUNCE;
-              getSoundEngine().peg(0);
-            }
-            if (ball.x - br < cupRight && ball.x - br > cupRight - wallThick - br && ball.vx < 0) {
-              ball.x = cupRight + br;
-              const dot = ball.vx;
-              ball.vx = Math.abs(dot) * BOUNCE;
-              getSoundEngine().peg(0);
-            }
-          }
-
-          // Bottom wall collision (inside cup)
-          if (ball.x > cupLeft && ball.x < cupRight &&
-              ball.y + br > cupBottom && ball.y - br < cupBottom + wallThick && ball.vy > 0) {
-            ball.y = cupBottom - br;
-            ball.vy = -Math.abs(ball.vy) * BOUNCE * 0.5;
           }
         }
 
