@@ -14,6 +14,7 @@ export const GAME_DISPLAY_SLOTS: Record<string, number> = {
   pendulum: 6,
   'angry-ball': 6,
   'gyro-maze': 4,
+  'spin': 0, // spin uses raw prize list (proportional wheel)
   // 'gift-slice': 10,
   // 'stack-tower': 10,
   // 'whac-a-mole': 10,

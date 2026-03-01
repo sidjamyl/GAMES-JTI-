@@ -2,7 +2,7 @@ import Link from "next/link";
 import { GameTheme, DEFAULT_THEME } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
-   Reusable Home Page — accepts theme for Winston/Camel/Default
+   Reusable Home Page — Grid layout for landscape tablet
    ═══════════════════════════════════════════════ */
 
 export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme }) {
@@ -15,7 +15,6 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
     {
       href: `${routePrefix}/plinko`,
       title: "Plinko",
-      desc: "Lâchez la bille et gagnez un cadeau",
       emoji: "🎱",
       accentFrom: GOLD,
       accentTo: AMBER,
@@ -23,7 +22,6 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
     {
       href: `${routePrefix}/gyro-maze`,
       title: "Gyro Maze",
-      desc: "Guidez la bille dans un labyrinthe aléatoire",
       emoji: "🏁",
       accentFrom: GOLD,
       accentTo: SIENNA,
@@ -31,7 +29,6 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
     {
       href: `${routePrefix}/angry-ball`,
       title: "Angry Ball",
-      desc: "Lancez la boule dans les trous !",
       emoji: "😡",
       accentFrom: AMBER,
       accentTo: '#ef4444',
@@ -39,7 +36,6 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
     {
       href: `${routePrefix}/pendulum`,
       title: "Pendulum",
-      desc: "Attrapez le cadeau au bon moment !",
       emoji: "🎣",
       accentFrom: GOLD,
       accentTo: '#6366f1',
@@ -47,35 +43,32 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
     {
       href: `${routePrefix}/cannon`,
       title: "Cannon",
-      desc: "Visez et tirez sur les plateformes",
       emoji: "💥",
       accentFrom: '#b45309',
       accentTo: '#ef4444',
     },
-
+    {
+      href: `${routePrefix}/spin`,
+      title: "Spin & Win",
+      emoji: "🎰",
+      accentFrom: GOLD,
+      accentTo: '#22c55e',
+    },
   ];
 
   return (
     <div
-      className="noise-overlay flex flex-col items-center px-6 gap-8 overflow-y-auto py-12"
+      className="noise-overlay flex flex-col items-center justify-center px-6 overflow-hidden"
       style={{
         width: "100%",
-        minHeight: "100dvh",
-        background: `radial-gradient(ellipse at 50% 20%, ${BG_LIGHT} 0%, ${BG_MID} 60%, ${BG_DARK} 100%)`,
+        height: "100dvh",
+        background: `radial-gradient(ellipse at 50% 30%, ${BG_LIGHT} 0%, ${BG_MID} 60%, ${BG_DARK} 100%)`,
       }}
     >
-      {/* Decorative line at top */}
-      <div
-        className="w-16 h-0.5 rounded-full"
-        style={{
-          background: `linear-gradient(90deg, transparent, ${GOLD}60, transparent)`,
-          animation: "fadeIn 0.6s ease-out both",
-        }}
-      />
-
-      <div className="text-center" style={{ animation: "fadeInUp 0.5s ease-out both" }}>
+      {/* Title */}
+      <div className="text-center mb-5" style={{ animation: "fadeInUp 0.4s ease-out both" }}>
         <h1
-          className="text-[32px] font-extrabold tracking-tight mb-2"
+          className="text-[26px] font-extrabold tracking-tight"
           style={{
             background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`,
             WebkitBackgroundClip: "text",
@@ -84,80 +77,68 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
         >
           Mini-Jeux
         </h1>
-        <p style={{ color: `${CREAM}45` }} className="text-sm">
+        <p style={{ color: `${CREAM}40` }} className="text-[11px] mt-1">
           Choisissez un jeu et tentez de gagner un cadeau
         </p>
       </div>
 
-      <div className="flex flex-col gap-4 w-full max-w-[340px]">
+      {/* Games Grid — 3 columns */}
+      <div
+        className="grid gap-3 w-full"
+        style={{
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          maxWidth: '600px',
+        }}
+      >
         {GAMES.map((game, i) => (
           <Link
             key={game.href}
             href={game.href}
-            className="group relative flex items-center gap-5 p-5 rounded-2xl transition-all duration-200 active:scale-[0.97]"
+            className="group relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all duration-200 active:scale-[0.95]"
             style={{
-              background: `${GOLD}08`,
-              border: `1px solid ${GOLD}0a`,
-              animation: `fadeInUp 0.5s ease-out ${0.15 + i * 0.1}s both`,
+              background: `linear-gradient(145deg, ${game.accentFrom}0c, ${game.accentTo}08)`,
+              border: `1px solid ${game.accentFrom}15`,
+              animation: `fadeInUp 0.4s ease-out ${0.08 + i * 0.06}s both`,
             }}
           >
             {/* Hover glow */}
             <div
               className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 pointer-events-none"
               style={{
-                background: `linear-gradient(135deg, ${game.accentFrom}10, ${game.accentTo}10)`,
-                border: `1px solid ${game.accentFrom}20`,
+                background: `radial-gradient(circle at 50% 40%, ${game.accentFrom}18, transparent 70%)`,
+                border: `1px solid ${game.accentFrom}30`,
                 borderRadius: "1rem",
               }}
             />
 
+            {/* Emoji */}
             <div
-              className="relative flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center text-2xl"
+              className="relative text-4xl select-none"
               style={{
-                background: `linear-gradient(135deg, ${game.accentFrom}12, ${game.accentTo}12)`,
-                border: `1px solid ${game.accentFrom}20`,
+                filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
               }}
             >
               {game.emoji}
             </div>
 
-            <div className="relative flex-1 min-w-0">
-              <h2
-                className="font-bold text-[16px] tracking-tight"
-                style={{ color: CREAM + 'dd' }}
-              >
-                {game.title}
-              </h2>
-              <p style={{ color: CREAM + '40' }} className="text-[13px] mt-0.5">
-                {game.desc}
-              </p>
-            </div>
-
-            <svg
-              className="relative w-5 h-5 flex-shrink-0"
-              style={{ color: CREAM + '20' }}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            {/* Title */}
+            <h2
+              className="relative font-bold text-[12px] tracking-tight text-center"
+              style={{ color: CREAM + 'cc' }}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
+              {game.title}
+            </h2>
+
+            {/* Subtle bottom accent line */}
+            <div
+              className="absolute bottom-0 left-[20%] right-[20%] h-px rounded-full"
+              style={{
+                background: `linear-gradient(90deg, transparent, ${game.accentFrom}30, transparent)`,
+              }}
+            />
           </Link>
         ))}
       </div>
-
-      {/* Bottom decorative line */}
-      <div
-        className="w-10 h-px rounded-full mt-4"
-        style={{
-          background: `linear-gradient(90deg, transparent, ${GOLD}30, transparent)`,
-        }}
-      />
     </div>
   );
 }

@@ -240,10 +240,14 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
     const w = c.offsetWidth * dpr;
     const h = c.offsetHeight * dpr;
     c.width = w; c.height = h;
-    const padding = 24 * dpr;
-    const mazeSize = Math.min(w - padding * 2, h * 0.60);
+    const padding = 20 * dpr;
+    // In landscape (tablet), use height as limiting dimension with more space
+    const isLandscape = w > h;
+    const mazeSize = isLandscape
+      ? Math.min(h - padding * 2, w * 0.55)
+      : Math.min(w - padding * 2, h * 0.60);
     const mazeX = (w - mazeSize) / 2;
-    const mazeY = h * 0.2;
+    const mazeY = isLandscape ? (h - mazeSize) / 2 : h * 0.2;
     sizeRef.current = { w, h, mazeX, mazeY, mazeSize };
   }, []);
 
@@ -413,7 +417,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
     }, 1000);
   }, [hasGyro, gyroPermission, requestGyroPermission, setupCanvas, resetBall, generateNewMaze]);
 
-  // Gyroscope
+  // Gyroscope — landscape-aware axis mapping
   useEffect(() => {
     if (phase !== 'playing') return;
     const handle = (e: DeviceOrientationEvent) => {
@@ -423,9 +427,21 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
         calibrationRef.current = { beta, gamma, calibrated: true };
       }
       const cal = calibrationRef.current;
-      const dx = (gamma - cal.gamma) / 25;
-      const dy = (beta - cal.beta) / 25;
-      tiltRef.current = { x: Math.max(-1, Math.min(1, dx)), y: Math.max(-1, Math.min(1, dy)) };
+      const rawGamma = (gamma - cal.gamma) / 25;
+      const rawBeta = (beta - cal.beta) / 25;
+      // In landscape mode (tablet held horizontally), axes are swapped:
+      // gamma = forward/backward tilt (maps to Y), beta = left/right tilt (maps to X)
+      const isLandscape = window.innerWidth > window.innerHeight;
+      let dx: number, dy: number;
+      if (isLandscape) {
+        // Landscape: beta controls X (left/right), gamma controls Y (forward/back)
+        dx = Math.max(-1, Math.min(1, rawBeta));
+        dy = Math.max(-1, Math.min(1, -rawGamma));
+      } else {
+        dx = Math.max(-1, Math.min(1, rawGamma));
+        dy = Math.max(-1, Math.min(1, rawBeta));
+      }
+      tiltRef.current = { x: dx, y: dy };
     };
     window.addEventListener('deviceorientation', handle);
     return () => window.removeEventListener('deviceorientation', handle);
@@ -733,19 +749,20 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       style={{ background: `radial-gradient(ellipse at 50% 20%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}
     >
       {/* Header */}
-      <div className="w-full max-w-[400px] flex flex-col items-center pt-8 pb-2 z-10" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
+      {phase === 'playing' && (
+      <div className="absolute top-2 left-0 right-0 flex flex-col items-center z-10 pointer-events-none" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
         <h1
-          className="text-[24px] font-black tracking-tight text-center"
+          className="text-[18px] font-black tracking-tight text-center"
           style={{ background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
         >
           Gyro Maze
         </h1>
-        <p style={{ color: CREAM + '40' }} className="text-xs mt-1">Guidez la bille vers un cadeau</p>
       </div>
+      )}
 
       {/* HUD */}
       {phase === 'playing' && (
-        <div className="w-full max-w-[400px] flex items-center justify-between px-6 py-2 z-10" style={{ animation: 'fadeIn 0.3s ease-out both' }}>
+        <div className="absolute top-2 left-4 right-4 flex items-center justify-between z-10 pointer-events-none" style={{ animation: 'fadeIn 0.3s ease-out both' }}>
           <div className="flex items-center gap-1">
             {Array.from({ length: MAX_ATTEMPTS }).map((_, i) => (
               <span key={i} className="text-lg">{i < MAX_ATTEMPTS - attempts ? '🟡' : '✕'}</span>
