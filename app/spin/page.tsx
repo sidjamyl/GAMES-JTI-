@@ -30,8 +30,9 @@ interface Slice {
 export default function Spin({ theme }: { theme?: GameTheme }) {
   const {
     GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA,
-    BG_DARK, BG_MID, BG_LIGHT, TOBACCO, MAHOGANY, routePrefix,
+    BG_DARK, BG_MID, BG_LIGHT, TOBACCO, MAHOGANY, routePrefix, mode,
   } = theme ?? DEFAULT_THEME;
+  const isLight = mode === 'light';
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [prizes, setPrizes] = useState<Prize[]>([]);
@@ -370,8 +371,8 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
       }}
     >
       {/* Back to menu */}
-      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
       {/* Header — only during ready */}
       {phase === 'ready' && (
@@ -380,17 +381,13 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
           style={{ animation: 'fadeInUp 0.4s ease-out both' }}
         >
           <h1
-            className="text-lg font-extrabold tracking-tight"
-            style={{
-              background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
+            className="text-[16px] font-bold tracking-[-0.01em]"
+            style={{ color: CREAM }}
           >
-            🎰 Spin & Win
+            Spin & Win
           </h1>
-          <p style={{ color: `${CREAM}50` }} className="text-[11px] mt-0.5">
-            Tournez la roue pour gagner un cadeau !
+          <p style={{ color: `${CREAM}45` }} className="text-[11px] mt-0.5">
+            Tournez la roue pour gagner
           </p>
         </div>
       )}
@@ -406,15 +403,15 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
       {phase === 'ready' && (
         <button
           onClick={startSpin}
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 px-10 py-3 rounded-2xl font-bold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.95]"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 px-8 py-3 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
           style={{
-            background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`,
-            color: BG_DARK,
-            boxShadow: `0 8px 30px -8px ${GOLD}80`,
+            background: GOLD,
+            color: '#ffffff',
+            boxShadow: `0 4px 20px -4px ${GOLD}50`,
             animation: 'fadeInUp 0.5s ease-out 0.3s both',
           }}
         >
-          Tourner la roue 🎰
+          Tourner la roue
         </button>
       )}
 

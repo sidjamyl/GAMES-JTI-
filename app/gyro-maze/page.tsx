@@ -184,7 +184,8 @@ function outerWalls(cols: number, rows: number, exits: ExitDef[]): WallSeg[] {
 }
 
 export default function GyroMaze({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, TOBACCO, BG_DARK, BG_MID, BG_LIGHT, routePrefix } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, TOBACCO, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode } = { ...DEFAULT_THEME, ...theme };
+  const isLight = mode === 'light';
   const creamRgb = hexToRgb(CREAM);
   const tobaccoRgb = hexToRgb(TOBACCO);
   const GOAL_COLORS = [GOLD, '#ef4444', '#3b82f6', '#22c55e'];
@@ -741,15 +742,15 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       style={{ background: `radial-gradient(ellipse at 50% 20%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}
     >
       {/* Back to menu */}
-      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
       {/* Header */}
       {phase === 'playing' && (
       <div className="absolute top-2 left-0 right-0 flex flex-col items-center z-10 pointer-events-none" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
         <h1
-          className="text-[18px] font-black tracking-tight text-center"
-          style={{ background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+          className="text-[15px] font-bold tracking-[-0.01em] text-center"
+          style={{ color: CREAM }}
         >
           Gyro Maze
         </h1>
@@ -759,14 +760,16 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       {/* HUD */}
       {phase === 'playing' && (
         <div className="absolute top-2 left-4 right-4 flex items-center justify-between z-10 pointer-events-none" style={{ animation: 'fadeIn 0.3s ease-out both' }}>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {Array.from({ length: MAX_ATTEMPTS }).map((_, i) => (
-              <span key={i} className="text-lg">{i < MAX_ATTEMPTS - attempts ? '🟡' : '✕'}</span>
+              <div key={i} className="w-2.5 h-2.5 rounded-full" style={{
+                background: i < MAX_ATTEMPTS - attempts ? GOLD : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)'),
+                boxShadow: i < MAX_ATTEMPTS - attempts ? `0 0 6px ${GOLD}40` : 'none',
+              }} />
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + '50' }} className="text-[11px] font-semibold uppercase tracking-wider">⏱</span>
-            <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + 'aa' }} className="text-sm font-bold tabular-nums">{Math.max(0, TIME_LIMIT - elapsed)}s</span>
+          <div className="flex items-center gap-1.5">
+            <span style={{ color: (TIME_LIMIT - elapsed) <= 10 ? '#ef4444' : CREAM + 'aa' }} className="text-[12px] font-semibold tabular-nums">{Math.max(0, TIME_LIMIT - elapsed)}s</span>
           </div>
         </div>
       )}
@@ -794,38 +797,37 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       {/* Ready screen */}
       {phase === 'ready' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-          <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 30%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
-          <div className="relative z-10 flex flex-col items-center gap-5 px-8">
-            <div className="flex gap-3 text-4xl" style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}>
-              <span>🎁</span><span>🎁</span><span>🎁</span>
+          <div className="absolute inset-0" style={{ background: isLight ? `linear-gradient(180deg, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` : `radial-gradient(ellipse at 50% 30%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
+          <div className="relative z-10 flex flex-col items-center gap-4 px-8">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: GOLD + '15', animation: 'victoryFloat 3s ease-in-out infinite' }}>
+              <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7" style={{ color: GOLD }}>
+                <rect x="4" y="4" width="24" height="24" rx="3" stroke="currentColor" strokeWidth="2" opacity="0.4"/>
+                <path d="M4 12h12v8H8v-4h8" stroke="currentColor" strokeWidth="2" opacity="0.6"/>
+                <circle cx="22" cy="22" r="2.5" fill="currentColor" opacity="0.9"/>
+              </svg>
             </div>
-            <h2 className="text-[28px] font-extrabold tracking-tight text-center"
-              style={{ background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${AMBER})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', animation: 'fadeInUp 0.6s ease-out both' }}>
+            <h2 className="text-[24px] font-bold tracking-[-0.02em] text-center"
+              style={{ color: CREAM, animation: 'fadeInUp 0.5s ease-out both' }}>
               Gyro Maze
             </h2>
-            <p style={{ color: CREAM + '50' }} className="text-[13px] text-center max-w-[260px] leading-relaxed">
+            <p style={{ color: CREAM + '55' }} className="text-[13px] text-center max-w-[240px] leading-relaxed">
               {gameOver ? (
                 <>Pas de chance cette fois…</>
               ) : (
-                <>
-                  Un labyrinthe complexe vous attend.<br />
-                  Évitez les trous et guidez la bille<br />
-                  vers un des 4 cadeaux ! {MAX_ATTEMPTS} vies.<br />
-                  <span style={{ color: CREAM + '30' }} className="text-[11px]">Inclinez ou touchez pour diriger</span>
-                </>
+                <>Guidez la bille à travers le labyrinthe vers un cadeau</>
               )}
             </p>
             {hasGyro === false && (
-              <p className="text-[11px] text-center" style={{ color: AMBER + '80', animation: 'fadeIn 0.5s ease-out 0.3s both' }}>
-                Gyroscope non détecté — touchez/glissez pour jouer
+              <p className="text-[11px] text-center" style={{ color: GOLD + '80', animation: 'fadeIn 0.5s ease-out 0.3s both' }}>
+                Gyroscope non détecté — touchez pour jouer
               </p>
             )}
             <button
               onClick={startGame}
-              className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.96]"
-              style={{ background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, boxShadow: `0 12px 40px -10px ${GOLD}80`, animation: 'fadeInUp 0.6s ease-out 0.2s both' }}
+              className="mt-1 px-8 py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
+              style={{ background: GOLD, color: '#ffffff', boxShadow: `0 4px 20px -4px ${GOLD}50`, animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
             >
-              Jouer 🏁
+              Commencer
             </button>
           </div>
         </div>

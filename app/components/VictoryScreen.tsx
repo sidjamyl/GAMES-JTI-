@@ -18,8 +18,8 @@ interface Props {
 export default function VictoryScreen({
   prize,
   onClose,
-  accentFrom = '#d4a843',
-  accentTo = '#c9842b',
+  accentFrom = '#C19A6B',
+  accentTo = '#8E7045',
   isConsolation = false,
 }: Props) {
   const [visible, setVisible] = useState(false);
@@ -49,102 +49,102 @@ export default function VictoryScreen({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center">
-      {/* Blurred backdrop */}
+      {/* Backdrop */}
       <div
-        className="absolute inset-0 transition-all duration-700"
+        className="absolute inset-0 transition-all duration-500"
         style={{
-          background: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
+          background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
           opacity: visible ? 1 : 0,
         }}
       />
 
-      {!isConsolation && <Confetti count={220} />}
+      {!isConsolation && <Confetti count={180} />}
 
       {/* Card */}
       <div
-        className="relative z-[110] flex flex-col items-center gap-4 mx-5 w-full max-w-[340px] rounded-[28px] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+        className="relative z-[110] flex flex-col items-center mx-5 w-full max-w-[340px] rounded-3xl overflow-hidden transition-all duration-600 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
         style={{
           background: 'rgba(255,255,255,0.97)',
-          boxShadow: `0 30px 90px -20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.6)`,
-          transform: visible ? 'scale(1) translateY(0)' : 'scale(0.3) translateY(60px)',
+          boxShadow: `0 24px 80px -16px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.04)`,
+          transform: visible ? 'scale(1) translateY(0)' : 'scale(0.9) translateY(24px)',
           opacity: visible ? 1 : 0,
         }}
       >
-        {/* Top gradient band */}
+        {/* Top accent line */}
         <div
-          className="w-full h-2"
+          className="w-full h-1"
           style={{ background: `linear-gradient(90deg, ${accentFrom}, ${accentTo})` }}
         />
 
-        <div className="flex flex-col items-center gap-3 px-8 pt-6 pb-8">
-          {/* Emoji badge */}
+        <div className="flex flex-col items-center gap-3 px-8 pt-8 pb-8">
+          {/* Prize icon container */}
           <div
             className="relative"
-            style={{
-              animation: 'victoryFloat 2.5s ease-in-out infinite',
-            }}
+            style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}
           >
-            {/* Glow ring */}
             <div
-              className="absolute inset-[-12px] rounded-full"
+              className="relative w-20 h-20 rounded-2xl flex items-center justify-center text-5xl"
               style={{
-                background: `radial-gradient(circle, ${accentFrom}30, transparent 70%)`,
-                animation: 'victoryPulse 2s ease-in-out infinite',
-              }}
-            />
-            <div
-              className="relative w-24 h-24 rounded-3xl flex items-center justify-center text-6xl"
-              style={{
-                background: `linear-gradient(135deg, ${accentFrom}15, ${accentTo}15)`,
-                border: `2px solid ${accentFrom}25`,
+                background: `linear-gradient(135deg, ${accentFrom}10, ${accentTo}10)`,
+                border: `1px solid ${accentFrom}18`,
               }}
             >
               {prize.emoji}
             </div>
           </div>
 
-          <p className="text-sm font-semibold tracking-widest uppercase" style={{ color: isConsolation ? '#6b7280' : accentFrom }}>
-            {isConsolation ? 'Pas de chance...' : 'Félicitations'}
-          </p>
+          {/* Status label */}
+          <span
+            className="text-[11px] font-semibold tracking-[0.15em] uppercase"
+            style={{ color: isConsolation ? '#94a3b8' : accentFrom }}
+          >
+            {isConsolation ? 'Pas de chance' : 'Félicitations'}
+          </span>
 
-          <h1 className="text-[26px] font-extrabold text-gray-900 text-center leading-tight tracking-tight">
-            {isConsolation ? 'Perdu ! Mais tenez…' : 'Vous avez gagné !'}
+          {/* Heading */}
+          <h1
+            className="text-[22px] font-bold text-center leading-tight tracking-[-0.02em]"
+            style={{ color: '#1a1a2e' }}
+          >
+            {isConsolation ? 'Partie terminée' : 'Vous avez gagné !'}
           </h1>
 
+          {/* Prize name */}
           <div
-            className="text-xl font-black text-center tracking-tight py-1 px-4 rounded-full"
+            className="text-[16px] font-bold text-center tracking-tight px-4 py-1.5 rounded-xl"
             style={{
-              background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: accentFrom,
+              background: `${accentFrom}0c`,
             }}
           >
             {prize.name}
           </div>
 
+          {/* CTA button */}
           {onClose && (
             <button
               onClick={onClose}
-              className="mt-3 w-full py-3.5 rounded-2xl text-white font-bold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.97]"
+              className="mt-3 w-full py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
               style={{
-                background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
-                boxShadow: `0 8px 30px -8px ${accentFrom}80`,
+                background: accentFrom,
+                color: '#ffffff',
+                boxShadow: `0 4px 20px -4px ${accentFrom}50`,
               }}
             >
-              Revenir demain 👋
+              Continuer
             </button>
           )}
 
           {/* Debug: WL.Execute status */}
           {wlStatus && (
             <div
-              className="mt-2 w-full text-center text-xs font-mono px-3 py-2 rounded-xl"
+              className="mt-2 w-full text-center text-[10px] font-mono px-3 py-2 rounded-lg"
               style={{
-                background: wlStatus.startsWith('✅') ? '#d4edda' : '#fff3cd',
-                color: wlStatus.startsWith('✅') ? '#155724' : '#856404',
-                border: `1px solid ${wlStatus.startsWith('✅') ? '#c3e6cb' : '#ffc107'}`,
+                background: wlStatus.startsWith('✅') ? '#ecfdf5' : '#fffbeb',
+                color: wlStatus.startsWith('✅') ? '#065f46' : '#92400e',
+                border: `1px solid ${wlStatus.startsWith('✅') ? '#d1fae5' : '#fef3c7'}`,
               }}
             >
               {wlStatus}

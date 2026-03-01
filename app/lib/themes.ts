@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════
    THEME DEFINITIONS
-   Winston (red/white/black) & Camel (yellow/cream/black)
+   Camel (warm cream) · LD (cool blue) · Winston (deep red)
+   Each theme provides a full palette for canvas rendering
+   and HTML overlay styling.
    ═══════════════════════════════════════════════ */
 
 /** Convert hex color to "r,g,b" string for use in rgba() */
@@ -13,71 +15,86 @@ export function hexToRgb(hex: string): string {
 
 export interface GameTheme {
   name: string;
-  /** Primary accent color (gold, red, yellow) */
+  /** 'light' | 'dark' — determines text contrast direction */
+  mode: 'light' | 'dark';
+  /** Primary accent color */
   GOLD: string;
   /** Bright version of primary */
   GOLD_BRIGHT: string;
-  /** Secondary accent (amber, dark red, orange) */
+  /** Secondary accent */
   AMBER: string;
-  /** Light foreground / text color */
+  /** Foreground / text color */
   CREAM: string;
-  /** Earthy accent (sienna, burgundy, gray) */
+  /** Strong accent for contrast elements */
   SIENNA: string;
-  /** Darkest background */
+  /** Deepest background layer */
   BG_DARK: string;
-  /** Mid background */
+  /** Mid background layer */
   BG_MID: string;
-  /** Lightest background (still dark) */
+  /** Lightest background layer */
   BG_LIGHT: string;
-  /** Dark surface for cards/boards */
+  /** Surface color for cards/boards */
   TOBACCO: string;
-  /** Slightly lighter surface */
+  /** Slightly different surface tone */
   MAHOGANY: string;
   /** Base route prefix for game links */
   routePrefix: string;
 }
 
-export const DEFAULT_THEME: GameTheme = {
-  name: 'default',
-  GOLD: '#d4a843',
-  GOLD_BRIGHT: '#e8c36a',
-  AMBER: '#c9842b',
-  CREAM: '#f5e6c8',
-  SIENNA: '#a0522d',
-  BG_DARK: '#0a0604',
-  BG_MID: '#120b05',
-  BG_LIGHT: '#1e1209',
-  TOBACCO: '#1a0f08',
-  MAHOGANY: '#2a1810',
-  routePrefix: '',
+/* ── Camel — warm cream & earthy browns ─────────────────── */
+export const CAMEL_THEME: GameTheme = {
+  name: 'camel',
+  mode: 'light',
+  GOLD: '#C19A6B',       // Camel primary
+  GOLD_BRIGHT: '#D4AD7C', // Lighter camel
+  AMBER: '#8E7045',       // Deep brown secondary
+  CREAM: '#2C1A0E',       // Dark brown text (readable on cream bg)
+  SIENNA: '#000080',      // Navy accent
+  BG_DARK: '#F8EBDE',     // Soft cream
+  BG_MID: '#F2E4D4',      // Warm mid
+  BG_LIGHT: '#FDF6EF',    // Lightest cream
+  TOBACCO: '#ECC299',     // Light camel surface
+  MAHOGANY: '#E0B487',    // Slightly deeper surface
+  routePrefix: '/camel',
 };
 
+/* ── LD — clean blue & white ────────────────────────────── */
+export const LD_THEME: GameTheme = {
+  name: 'ld',
+  mode: 'light',
+  GOLD: '#007BFF',        // Bleu LD primary
+  GOLD_BRIGHT: '#3D9BFF', // Lighter blue
+  AMBER: '#0D47A1',       // Bleu marine secondary
+  CREAM: '#0A1628',       // Very dark blue text
+  SIENNA: '#0D47A1',      // Bleu marine accent
+  BG_DARK: '#F8F9FA',     // Blanc cassé
+  BG_MID: '#EFF5FB',      // Very light blue-grey
+  BG_LIGHT: '#FFFFFF',    // Pure white
+  TOBACCO: '#E3F2FD',     // Gris bleu clair surface
+  MAHOGANY: '#D0E8FC',    // Slightly deeper blue surface
+  routePrefix: '/ld',
+};
+
+/* ── Winston — bold red on deep blue-grey ───────────────── */
 export const WINSTON_THEME: GameTheme = {
   name: 'winston',
-  GOLD: '#db0521',
-  GOLD_BRIGHT: '#ff2d4a',
-  AMBER: '#a80418',
-  CREAM: '#f4f4f4',
-  SIENNA: '#7a0316',
-  BG_DARK: '#050001',
-  BG_MID: '#120206',
-  BG_LIGHT: '#1e050a',
-  TOBACCO: '#180408',
-  MAHOGANY: '#2a0a10',
+  mode: 'dark',
+  GOLD: '#c0392b',        // Rouge Winston
+  GOLD_BRIGHT: '#e74c3c', // Rouge vif
+  AMBER: '#a93226',       // Darker red
+  CREAM: '#ffffff',       // White text
+  SIENNA: '#7b241c',      // Deep red accent
+  BG_DARK: '#1a252f',     // Bleu nuit profond
+  BG_MID: '#2c3e50',      // Bleu-gris foncé
+  BG_LIGHT: '#34495e',    // Gris ardoise
+  TOBACCO: '#243342',     // Dark blue-grey surface
+  MAHOGANY: '#2c3e50',    // Mid surface
   routePrefix: '/winston',
 };
 
-export const CAMEL_THEME: GameTheme = {
-  name: 'camel',
-  GOLD: '#f0d859',
-  GOLD_BRIGHT: '#f7e97f',
-  AMBER: '#fcba0f',
-  CREAM: '#fffaf4',
-  SIENNA: '#b7b9be',
-  BG_DARK: '#040400',
-  BG_MID: '#0f0e04',
-  BG_LIGHT: '#1c1a08',
-  TOBACCO: '#161408',
-  MAHOGANY: '#262210',
-  routePrefix: '/camel',
+/* ── Default — same as Camel (neutral entry) ────────────── */
+export const DEFAULT_THEME: GameTheme = {
+  ...CAMEL_THEME,
+  name: 'default',
+  routePrefix: '',
 };

@@ -31,6 +31,7 @@ const DEPTH = 6; // 3D depth offset
 
 export default function StackTower({ theme }: { theme?: GameTheme }) {
   const T = { ...DEFAULT_THEME, ...theme };
+  const isLight = T.mode === 'light';
   const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY } = T;
   const goldRgb = hexToRgb(GOLD);
   const creamRgb = hexToRgb(CREAM);
@@ -243,7 +244,7 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
         ctx.fillStyle = GOLD_BRIGHT;
         ctx.font = 'bold 12px system-ui';
         ctx.textAlign = 'center';
-        ctx.fillText(`⚡ ${perfectStreakRef.current}x PARFAIT`, w / 2, 26);
+        ctx.fillText(`${perfectStreakRef.current}x PARFAIT`, w / 2, 26);
       }
 
       animRef.current = requestAnimationFrame(loop);
@@ -372,8 +373,8 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
   return (
     <div className="game-container noise-overlay flex flex-col items-center justify-center" style={{ background: BG_DARK }}>
       {/* Back to menu */}
-      <Link href={T.routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      <Link href={T.routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
       {phase === 'playing' && (
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}
@@ -381,24 +382,17 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
       )}
       {phase === 'ready' && (
         <div className="flex flex-col items-center gap-6 z-20 px-8">
-          <div className="flex flex-col items-center gap-1">
-            {[0, 1, 2, 3].map(i => (
-              <div key={i} className="rounded" style={{
-                width: `${80 - i * 8}px`, height: '16px',
-                background: `hsl(${getHue(3 - i)}, 55%, 50%)`,
-                animation: `fadeInUp 0.4s ease-out ${i * 0.1}s both`,
-              }} />
-            ))}
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{
+            background: isLight ? `${GOLD}12` : `${GOLD}18`, border: `1.5px solid ${isLight ? GOLD + '20' : GOLD + '25'}`,
+          }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="16" width="16" height="4" rx="1"/><rect x="6" y="10" width="12" height="4" rx="1"/><rect x="8" y="4" width="8" height="4" rx="1"/></svg>
           </div>
-          <h1 className="text-[32px] font-extrabold tracking-tight text-center" style={{
-            background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`,
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Stack Tower</h1>
-          <p className="text-[14px] text-center max-w-[260px] leading-relaxed" style={{ color: CREAM + '60' }}>
+          <h1 className="text-[28px] font-bold tracking-tight text-center" style={{ color: CREAM }}>Stack Tower</h1>
+          <p className="text-[13px] text-center max-w-[240px] leading-relaxed" style={{ color: isLight ? CREAM + '70' : CREAM + '50' }}>
             Empilez les blocs le plus haut possible !<br/>Plus c&apos;est haut, meilleur le cadeau
           </p>
-          <button onClick={start} className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-lg tracking-wide transition-all active:scale-[0.96]" style={{
-            background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, boxShadow: `0 12px 40px -10px ${GOLD}80`,
+          <button onClick={start} className="mt-2 px-10 py-4 rounded-xl font-semibold text-[15px] tracking-wide transition-all active:scale-[0.97]" style={{
+            background: GOLD, color: isLight ? '#fff' : BG_DARK,
           }}>Commencer</button>
         </div>
       )}

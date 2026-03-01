@@ -21,7 +21,7 @@ const GIFT_SHOW_MIN = 150;  // ms minimum visible time
 const GIFT_SHOW_MAX = 320;  // ms maximum visible time
 const SPAWN_INTERVAL = 250; // ms between spawns (constant)
 
-const CATCH_EMOJI = '✨';
+const CATCH_EMOJI = '✓';
 
 interface Hole {
   id: number;
@@ -33,7 +33,8 @@ interface Hole {
 }
 
 export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY, routePrefix } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY, routePrefix, mode } = { ...DEFAULT_THEME, ...theme };
+  const isLight = mode === 'light';
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
@@ -177,8 +178,8 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
       }}
     >
       {/* Back to menu */}
-      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
       {/* Header */}
       <div className="w-full max-w-[380px] flex flex-col items-center pt-10 pb-2" style={{ animation: 'fadeInUp 0.5s ease-out both', zIndex: 10 }}>
@@ -200,30 +201,25 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
 
         {phase === 'ready' && (
           <div className="flex flex-col items-center gap-6" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
-            <div className="w-24 h-24 rounded-3xl flex items-center justify-center text-6xl"
-              style={{
-                background: `linear-gradient(135deg, ${GOLD}15, ${AMBER}15)`,
-                border: `2px solid ${GOLD}25`,
-                animation: 'victoryFloat 2.5s ease-in-out infinite',
-              }}>
-              🎁
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{
+              background: isLight ? `${GOLD}12` : `${GOLD}18`, border: `1.5px solid ${isLight ? GOLD + '20' : GOLD + '25'}`,
+              animation: 'victoryFloat 2.5s ease-in-out infinite',
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8V3m-4 5l4-3 4 3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="3" y1="14" x2="21" y2="14"/></svg>
             </div>
-            <p style={{ color: CREAM + '50' }} className="text-sm text-center max-w-[260px]">
+            <p style={{ color: isLight ? CREAM + '60' : CREAM + '50' }} className="text-[13px] text-center max-w-[240px] leading-relaxed">
               Des cadeaux apparaissent brièvement.<br />
-              Tapez sur un cadeau pour le gagner !<br />
-              <span style={{ color: CREAM + '25' }} className="text-xs">
-                Soyez rapide — ils disparaissent vite
-              </span>
+              Tapez sur un cadeau pour le gagner !
             </p>
             {gameOver && (
-              <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
-                Trop lent ! Réessayez 💪
+              <p className="text-sm font-semibold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
+                Trop lent ! Réessayez
               </p>
             )}
             <button onClick={startGame}
-              className="px-10 py-4 rounded-2xl text-white font-bold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.97]"
-              style={{ background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, boxShadow: `0 8px 30px -8px ${GOLD}80` }}>
-              {gameOver ? 'Réessayer 🎁' : 'Jouer 🎁'}
+              className="px-10 py-4 rounded-xl font-semibold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.97]"
+              style={{ background: GOLD, color: isLight ? '#fff' : BG_DARK }}>
+              {gameOver ? 'Réessayer' : 'Jouer'}
             </button>
           </div>
         )}
@@ -260,7 +256,7 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
                         transform: hole.caught ? 'scale(1.2)' : 'scale(1)',
                         transition: 'filter 0.15s, transform 0.15s',
                       }}>
-                      {hole.caught ? CATCH_EMOJI : (hole.prize?.emoji || '🎁')}
+                      {hole.caught ? CATCH_EMOJI : (hole.prize?.emoji || '●')}
                     </span>
 
                   </div>

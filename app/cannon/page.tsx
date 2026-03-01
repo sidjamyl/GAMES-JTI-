@@ -39,6 +39,7 @@ const MAX_ATTEMPTS = 3;
 
 export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   const T = { ...DEFAULT_THEME, ...theme };
+  const isLight = T.mode === 'light';
   const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY } = T;
   const goldRgb = hexToRgb(GOLD);
   const creamRgb = hexToRgb(CREAM);
@@ -642,11 +643,12 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
 
       // HUD — attempts remaining
       const remaining = MAX_ATTEMPTS - attemptsRef.current;
-      ctx.fillStyle = CREAM + '60';
-      ctx.font = 'bold 13px system-ui';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(`${'💣'.repeat(remaining)}${'✖️'.repeat(attemptsRef.current)}`, 14, h - 24);
+      for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        const dx = 14 + i * 14;
+        ctx.beginPath(); ctx.arc(dx, h - 18, 4, 0, Math.PI * 2);
+        if (i < remaining) { ctx.fillStyle = GOLD; ctx.fill(); }
+        else { ctx.strokeStyle = CREAM + '25'; ctx.lineWidth = 1.2; ctx.stroke(); }
+      }
 
       animRef.current = requestAnimationFrame(loop);
     };
@@ -727,8 +729,8 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
   return (
     <div className="game-container noise-overlay flex flex-col items-center justify-center" style={{ background: BG_DARK }}>
       {/* Back to menu */}
-      <Link href={T.routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      <Link href={T.routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
       {phase === 'playing' && (
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}
@@ -737,25 +739,23 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         />
       )}
       {phase === 'ready' && (
-        <div className="flex flex-col items-center gap-6 z-20 px-8">
-          <div className="text-6xl" style={{ animation: 'victoryFloat 2s ease-in-out infinite' }}>💣</div>
-          <h1 className="text-[32px] font-extrabold tracking-tight text-center" style={{
-            background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`,
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Cannon</h1>
-          <p className="text-[14px] text-center max-w-[280px] leading-relaxed" style={{ color: CREAM + '60' }}>
-            Visez et tirez ! Atteignez un cadeau<br/>sur les plateformes pour le gagner.
-            <br/><span style={{ color: CREAM + '35' }} className="text-[11px]">{MAX_ATTEMPTS} tirs pour décrocher un cadeau premium</span>
+        <div className="flex flex-col items-center gap-4 z-20 px-8">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: GOLD + '15', animation: 'victoryFloat 3s ease-in-out infinite' }}>
+            <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7" style={{ color: GOLD }}>
+              <rect x="4" y="18" width="12" height="6" rx="3" fill="currentColor" opacity="0.7" transform="rotate(-25 10 21)"/>
+              <circle cx="24" cy="10" r="4" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+            </svg>
+          </div>
+          <h1 className="text-[24px] font-bold tracking-[-0.02em] text-center" style={{ color: CREAM }}>Cannon</h1>
+          <p className="text-[13px] text-center max-w-[240px] leading-relaxed" style={{ color: CREAM + '60' }}>
+            Visez et tirez pour atteindre un cadeau sur les plateformes
           </p>
           {gameOver && (
-            <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
-              Perdu ! Réessayez 💪
-            </p>
+            <p className="text-sm font-semibold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>Pas de chance, réessayez</p>
           )}
-          <button onClick={start} className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-lg tracking-wide transition-all active:scale-[0.96]" style={{
-            background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`,
-            boxShadow: `0 12px 40px -10px ${GOLD}80`,
-          }}>{gameOver ? 'Réessayer 💣' : 'Tirer'}</button>
+          <button onClick={start} className="mt-1 px-8 py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all active:scale-[0.97]" style={{
+            background: GOLD, color: '#ffffff', boxShadow: `0 4px 20px -4px ${GOLD}50`,
+          }}>{gameOver ? 'Réessayer' : 'Commencer'}</button>
         </div>
       )}
       {phase === 'loading' && (

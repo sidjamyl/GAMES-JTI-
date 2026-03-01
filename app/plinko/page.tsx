@@ -43,7 +43,8 @@ interface Peg {
 }
 
 export default function Plinko({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, TOBACCO, MAHOGANY, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, TOBACCO, MAHOGANY, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode } = { ...DEFAULT_THEME, ...theme };
+  const isLight = mode === 'light';
   const goldRgb = hexToRgb(GOLD);
   const amberRgb = hexToRgb(AMBER);
   const siennaRgb = hexToRgb(SIENNA);
@@ -589,8 +590,8 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       style={{ background: BG_DARK }}
     >
       {/* Back to menu */}
-      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
       {phase === 'playing' && (
         <>
@@ -602,11 +603,12 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
             onMouseDown={handleCanvasInteraction}
           />
           {/* HUD: remaining attempts */}
-          <div className="absolute top-3 right-3 z-30 flex gap-1">
+          <div className="absolute top-3 right-3 z-30 flex gap-1.5">
             {Array.from({ length: MAX_ATTEMPTS }).map((_, i) => (
-              <span key={i} className="text-lg">
-                {i < MAX_ATTEMPTS - attempts ? '🟡' : '✕'}
-              </span>
+              <div key={i} className="w-2.5 h-2.5 rounded-full transition-all duration-300" style={{
+                background: i < MAX_ATTEMPTS - attempts ? GOLD : (isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)'),
+                boxShadow: i < MAX_ATTEMPTS - attempts ? `0 0 6px ${GOLD}40` : 'none',
+              }} />
             ))}
           </div>
         </>
@@ -614,65 +616,63 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
 
       {/* Ready screen */}
       {phase === 'ready' && (
-        <div className="flex flex-col items-center gap-6 z-20 px-8">
-          {/* Decorative gold dots */}
-          <div className="relative w-[140px] h-[150px] mb-2">
-            {[...Array(6)].map((_, row) =>
-              [...Array(row % 2 === 0 ? 5 : 4)].map((__, col) => (
+        <div className="flex flex-col items-center gap-5 z-20 px-8">
+          {/* Decorative peg pattern */}
+          <div className="relative w-[120px] h-[120px] mb-1">
+            {[...Array(5)].map((_, row) =>
+              [...Array(row % 2 === 0 ? 4 : 3)].map((__, col) => (
                 <div
                   key={`${row}-${col}`}
-                  className="absolute w-2 h-2 rounded-full"
+                  className="absolute w-1.5 h-1.5 rounded-full"
                   style={{
-                    background: `radial-gradient(circle, ${GOLD}80, ${AMBER}40)`,
-                    left: `${(row % 2 === 0 ? col * 28 + 10 : col * 28 + 24)}px`,
+                    background: GOLD + '60',
+                    left: `${(row % 2 === 0 ? col * 30 + 8 : col * 30 + 23)}px`,
                     top: `${row * 24 + 8}px`,
-                    animation: `fadeIn 0.4s ease-out ${(row * 5 + col) * 0.03}s both`,
+                    animation: `fadeIn 0.3s ease-out ${(row * 4 + col) * 0.04}s both`,
                   }}
                 />
               )),
             )}
             {/* Ball preview */}
             <div
-              className="absolute w-5 h-5 rounded-full"
+              className="absolute w-4 h-4 rounded-full"
               style={{
-                background: `radial-gradient(circle at 35% 35%, ${CREAM}, ${GOLD})`,
-                boxShadow: `0 0 20px ${GOLD}60`,
-                left: '58px',
-                top: '0px',
-                animation: 'victoryFloat 2s ease-in-out infinite',
+                background: GOLD,
+                left: '52px',
+                top: '2px',
+                animation: 'victoryFloat 2.5s ease-in-out infinite',
               }}
             />
           </div>
 
           <h1
-            className="text-[32px] font-extrabold tracking-tight text-center leading-tight"
+            className="text-[26px] font-bold tracking-[-0.02em] text-center leading-tight"
             style={{
-              background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${GOLD}, ${AMBER})`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              animation: 'fadeInUp 0.6s ease-out 0.2s both',
+              color: CREAM,
+              animation: 'fadeInUp 0.5s ease-out 0.1s both',
             }}
           >
             Plinko
           </h1>
           <p
-            className="text-[14px] text-center max-w-[260px] leading-relaxed"
-            style={{ color: CREAM + '60', animation: 'fadeInUp 0.6s ease-out 0.3s both' }}
+            className="text-[13px] text-center max-w-[240px] leading-relaxed"
+            style={{ color: CREAM + '60', animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
           >
             {gameOver
               ? 'Pas de chance cette fois…'
-              : `Lâchez la bille et visez un cadeau !\n${MAX_ATTEMPTS} tentative${MAX_ATTEMPTS > 1 ? 's' : ''}`}
+              : `Lâchez la bille et visez un cadeau`}
           </p>
           <button
             onClick={start}
-            className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-lg tracking-wide transition-all duration-200 active:scale-[0.96]"
+            className="mt-1 px-8 py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
             style={{
-              background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`,
-              boxShadow: `0 12px 40px -10px ${GOLD}80`,
-              animation: 'fadeInUp 0.6s ease-out 0.4s both',
+              background: GOLD,
+              color: isLight ? '#ffffff' : '#ffffff',
+              boxShadow: `0 4px 20px -4px ${GOLD}50`,
+              animation: 'fadeInUp 0.5s ease-out 0.3s both',
             }}
           >
-            Lâcher la bille
+            {gameOver ? 'Réessayer' : 'Commencer'}
           </button>
         </div>
       )}

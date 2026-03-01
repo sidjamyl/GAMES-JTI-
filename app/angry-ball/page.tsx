@@ -202,7 +202,8 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
 }
 
 export default function AngryBall({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode } = { ...DEFAULT_THEME, ...theme };
+  const isLight = mode === 'light';
   const goldRgb = hexToRgb(GOLD);
   const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#b45309'];
 
@@ -994,8 +995,8 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
     <div style={wrapperStyle}>
         <div className="relative w-full h-full" style={{ background: BG_DARK }}>
         {/* Back to menu */}
-        <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+        <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
         </Link>
         <canvas
           ref={canvasRef}
@@ -1013,29 +1014,34 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
         {/* Ready screen */}
         {phase === 'ready' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 30% 50%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
+            <div className="absolute inset-0" style={{ background: isLight ? `linear-gradient(180deg, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` : `radial-gradient(ellipse at 30% 50%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
             <div className="relative z-10 flex flex-col items-center gap-4 px-8">
-              <div className="text-6xl" style={{ animation: 'victoryFloat 3s ease-in-out infinite' }}>😡</div>
-              <h1 className="text-[28px] font-extrabold tracking-tight text-center"
-                style={{ background: `linear-gradient(135deg, ${GOLD_BRIGHT}, ${AMBER})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', animation: 'fadeInUp 0.6s ease-out both' }}>
+              {/* Icon */}
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: GOLD + '15', animation: 'victoryFloat 3s ease-in-out infinite' }}>
+                <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7" style={{ color: GOLD }}>
+                  <circle cx="8" cy="20" r="5" fill="currentColor" opacity="0.9"/>
+                  <path d="M13 20 L26 10" stroke="currentColor" strokeWidth="2" strokeDasharray="2 2" opacity="0.4"/>
+                  <rect x="23" y="6" width="6" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+                </svg>
+              </div>
+              <h1 className="text-[24px] font-bold tracking-[-0.02em] text-center"
+                style={{ color: CREAM, animation: 'fadeInUp 0.5s ease-out both' }}>
                 Angry Ball
               </h1>
-              <p style={{ color: CREAM + '60' }} className="text-[13px] leading-relaxed text-center max-w-[260px]">
-                Tirez la boule et visez le cadeau
-                <br />que vous voulez gagner !
-                <br /><span style={{ color: CREAM + '35' }} className="text-[11px]">Chaque trou = un cadeau différent • {MAX_ATTEMPTS} tirs</span>
+              <p style={{ color: CREAM + '60' }} className="text-[13px] leading-relaxed text-center max-w-[240px]">
+                Tirez la boule et visez le cadeau que vous voulez gagner
               </p>
               {gameOver && (
-                <p className="text-sm font-bold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
-                  Perdu ! Réessayez 💪
+                <p className="text-sm font-semibold" style={{ color: '#ef4444', animation: 'fadeIn 0.3s ease-out both' }}>
+                  Pas de chance, réessayez
                 </p>
               )}
               <button
                 onClick={start}
-                className="mt-2 px-10 py-4 rounded-2xl text-white font-bold text-[15px] tracking-wide transition-all duration-200 active:scale-[0.96]"
-                style={{ background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, boxShadow: `0 12px 40px -10px ${GOLD}80`, animation: 'fadeInUp 0.6s ease-out 0.2s both' }}
+                className="mt-1 px-8 py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
+                style={{ background: GOLD, color: '#ffffff', boxShadow: `0 4px 20px -4px ${GOLD}50`, animation: 'fadeInUp 0.5s ease-out 0.2s both' }}
               >
-                {gameOver ? 'Réessayer 😡' : 'Lancer 😡'}
+                {gameOver ? 'Réessayer' : 'Commencer'}
               </button>
             </div>
           </div>
