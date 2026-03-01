@@ -53,6 +53,7 @@ interface BallState {
   rotation: number;
   trail: { x: number; y: number; alpha: number }[];
   stillFrames: number;
+  launchedFrames: number;
 }
 
 /* ── Layout generation — smaller boxes at random positions ── */
@@ -120,45 +121,80 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
     });
   }
 
-  // More obstacles for a real challenge (6-10)
-  // Helper: check if an obstacle AABB overlaps any cup or platform AABB (with margin)
-  const margin = 0.04; // extra clearance around cups
+  // ── OBSTACLE PLACEMENT ──
+  // Rules:
+  //   1. Never block a cup opening — large exclusion zone above & around each cup
+  //   2. Obstacles only in the APPROACH zone (x < 0.32) and MID zone (between cups)
+  //   3. No obstacle-on-obstacle overlap
+  //   4. Every cup must remain reachable via an arc from the slingshot
+
+  const cupMargin = 0.06; // clearance around every cup
+  const obsMargin = 0.03; // clearance between obstacles
+
   function overlapsAnyCup(ox: number, oy: number, ow: number, oh: number): boolean {
+    const oL = ox - ow / 2, oR = ox + ow / 2, oT = oy - oh / 2, oB = oy + oh / 2;
     for (const c of cups) {
-      // Cup bounding box
-      const cLeft = c.x - c.w / 2 - margin;
-      const cRight = c.x + c.w / 2 + margin;
-      const cTop = c.y - margin;
-      const cBottom = c.y + c.h + 0.02 + margin; // include platform below
-      // Obstacle bounding box
-      const oLeft = ox - ow / 2;
-      const oRight = ox + ow / 2;
-      const oTop = oy - oh / 2;
-      const oBottom = oy + oh / 2;
-      if (oLeft < cRight && oRight > cLeft && oTop < cBottom && oBottom > cTop) return true;
+      const cL = c.x - c.w / 2 - cupMargin;
+      const cR = c.x + c.w / 2 + cupMargin;
+      const cT = c.y - cupMargin * 1.2; // some space above for the ball to enter
+      const cB = c.y + c.h + 0.03 + cupMargin;
+      if (oL < cR && oR > cL && oT < cB && oB > cT) return true;
     }
     return false;
   }
 
-  const numObs = 6 + Math.floor(Math.random() * 5);
-  for (let i = 0; i < numObs; i++) {
-    const isVertical = Math.random() > 0.5;
-    const ow = isVertical ? 0.020 + Math.random() * 0.012 : 0.065 + Math.random() * 0.050;
-    const oh = isVertical ? 0.12 + Math.random() * 0.10 : 0.018 + Math.random() * 0.012;
-    let ox = 0, oy = 0;
-    let valid = false;
+  function overlapsAnyObs(ox: number, oy: number, ow: number, oh: number): boolean {
+    const oL = ox - ow / 2, oR = ox + ow / 2, oT = oy - oh / 2, oB = oy + oh / 2;
+    for (const ob of obstacles) {
+      const bL = ob.x - ob.w / 2 - obsMargin, bR = ob.x + ob.w / 2 + obsMargin;
+      const bT = ob.y - ob.h / 2 - obsMargin, bB = ob.y + ob.h / 2 + obsMargin;
+      if (oL < bR && oR > bL && oT < bB && oB > bT) return true;
+    }
+    return false;
+  }
 
-    for (let tries = 0; tries < 60; tries++) {
-      ox = 0.18 + Math.random() * 0.70;
-      oy = 0.12 + Math.random() * 0.70;
-      if (!overlapsAnyCup(ox, oy, ow, oh)) {
-        valid = true;
-        break;
+  // Launch clear zone: keep ~60% of the distance from sling to first cup clear
+  const slingX = 0.08; // approx slingshot x position
+  const leftmostCupX = cups.reduce((min, c) => Math.min(min, c.x - c.w / 2), 1);
+  const launchClearX = slingX + (leftmostCupX - slingX) * 0.55; // obstacles allowed in outer 45% of approach
+
+  function tryPlace(ox: number, oy: number, ow: number, oh: number, jitter = 0.06): boolean {
+    for (let t = 0; t < 40; t++) {
+      const jx = t === 0 ? 0 : (Math.random() - 0.5) * jitter;
+      const jy = t === 0 ? 0 : (Math.random() - 0.5) * jitter;
+      const px = Math.max(0.05, Math.min(0.95, ox + jx));
+      const py = Math.max(0.08, Math.min(0.85, oy + jy));
+      // Reject if inside the launch clear zone (sling → first cup)
+      if (px - ow / 2 < launchClearX) continue;
+      if (!overlapsAnyCup(px, py, ow, oh) && !overlapsAnyObs(px, py, ow, oh)) {
+        obstacles.push({ x: px, y: py, w: ow, h: oh });
+        return true;
       }
     }
-    if (!valid) continue; // skip this obstacle if no valid spot found
+    return false;
+  }
 
-    obstacles.push({ x: ox, y: oy, w: ow, h: oh });
+  // ── Obstacles only AFTER the launch clear zone ──
+  // MID ZONE: between cup clusters
+  const midMinX = Math.max(launchClearX + 0.02, 0.32);
+  const midCount = 5 + Math.floor(Math.random() * 3); // 5-7
+  for (let i = 0; i < midCount; i++) {
+    const isVert = Math.random() > 0.5;
+    const ox = midMinX + Math.random() * (0.60 - midMinX);
+    const oy = 0.10 + Math.random() * 0.72;
+    if (isVert) {
+      tryPlace(ox, oy, 0.016 + Math.random() * 0.008, 0.07 + Math.random() * 0.05, 0.10);
+    } else {
+      tryPlace(ox, oy, 0.05 + Math.random() * 0.04, 0.014 + Math.random() * 0.005, 0.10);
+    }
+  }
+
+  // FAR ZONE: bounce ramps beyond most cups
+  const farCount = 2 + Math.floor(Math.random() * 2); // 2-3
+  for (let i = 0; i < farCount; i++) {
+    const ox = 0.65 + Math.random() * 0.23;
+    const oy = 0.12 + Math.random() * 0.68;
+    tryPlace(ox, oy, 0.04 + Math.random() * 0.03, 0.014 + Math.random() * 0.004, 0.10);
   }
 
   return { cups, obstacles, platforms };
@@ -181,7 +217,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
 
   const ballRef = useRef<BallState>({
     x: 0, y: 0, vx: 0, vy: 0,
-    launched: false, landed: false, rotation: 0, trail: [], stillFrames: 0,
+    launched: false, landed: false, rotation: 0, trail: [], stillFrames: 0, launchedFrames: 0,
   });
   const cupsRef = useRef<Cup[]>([]);
   const obstaclesRef = useRef<Obstacle[]>([]);
@@ -193,8 +229,10 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
   const gameAreaRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
   const attemptsRef = useRef(0);
   const lastTimeRef = useRef(0);
+  const prizesRef = useRef<Prize[]>([]);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { prizesRef.current = prizes; }, [prizes]);
   useEffect(() => { fetchPrizes().then(p => { setPrizes(p); setPhase('ready'); }); }, []);
   useEffect(() => {
     const check = () => {
@@ -241,7 +279,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
       x: anchor.x, y: anchor.y,
       vx: 0, vy: 0,
       launched: false, landed: false,
-      rotation: 0, trail: [], stillFrames: 0,
+      rotation: 0, trail: [], stillFrames: 0, launchedFrames: 0,
     };
     draggingRef.current = false;
   }, [toGame]);
@@ -682,19 +720,26 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           }
         }
 
-        // Stillness detection — ball stopped = missed shot
-        if (Math.abs(ball.vx) < 0.25 * dpr && Math.abs(ball.vy) < 0.25 * dpr) {
+        // Stuck / miss detection
+        ball.launchedFrames++;
+        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+        if (speed < 1.0 * dpr) {
           ball.stillFrames++;
         } else {
           ball.stillFrames = 0;
         }
 
-        if (ball.stillFrames > 90 && !ball.landed) {
+        // Ball nearly stopped for 60 frames = missed shot (no more anti-stuck kicks)
+        const isMiss = ball.stillFrames > 60 && !ball.landed;
+        // Safety: if ball has been flying for 600+ frames (~10s), force miss
+        const isTooLong = ball.launchedFrames > 600 && !ball.landed;
+
+        if (isMiss || isTooLong) {
           attemptsRef.current++;
           setAttempts(attemptsRef.current);
           if (attemptsRef.current >= MAX_ATTEMPTS) {
             setGameOver(true);
-            const consolation = getConsolationPrize(prizes);
+            const consolation = getConsolationPrize(prizesRef.current);
             setWonPrize(consolation);
             setTimeout(() => setPhase('victory'), 800);
             return;
@@ -708,7 +753,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           setAttempts(attemptsRef.current);
           if (attemptsRef.current >= MAX_ATTEMPTS) {
             setGameOver(true);
-            const consolation = getConsolationPrize(prizes);
+            const consolation = getConsolationPrize(prizesRef.current);
             setWonPrize(consolation);
             setTimeout(() => setPhase('victory'), 800);
             return;
