@@ -369,18 +369,82 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
       }
       ctx.restore();
 
-      // Power gauge (arc around cannon)
+      // Power gauge (enhanced arc around cannon)
       if (!firedRef.current) {
-        const gaugeR = 28;
-        ctx.strokeStyle = GOLD + '15';
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(cannonBaseX, cannonBaseY, gaugeR, -Math.PI * 0.8, -0.05); ctx.stroke();
-        const fillEnd = -Math.PI * 0.8 + power * (Math.PI * 0.8 - 0.05);
-        ctx.strokeStyle = power > 0.85 ? '#ef4444' : GOLD;
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(cannonBaseX, cannonBaseY, gaugeR, -Math.PI * 0.8, fillEnd); ctx.stroke();
+        const gaugeR = 32;
+        const gaugeStart = -Math.PI * 0.82;
+        const gaugeEnd = -0.03;
+        const gaugeArc = gaugeEnd - gaugeStart;
+        const fillEnd = gaugeStart + power * gaugeArc;
 
-        // No trajectory preview — pure skill!
+        // Background track
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(cannonBaseX, cannonBaseY, gaugeR, gaugeStart, gaugeEnd); ctx.stroke();
+
+        // Filled power arc — gradient green → yellow → red
+        const powerColor = power < 0.4 ? '#22c55e' : power < 0.7 ? GOLD : power < 0.85 ? '#f59e0b' : '#ef4444';
+        const powerGlow = power > 0.7 ? 12 : 6;
+        ctx.save();
+        ctx.shadowBlur = powerGlow;
+        ctx.shadowColor = powerColor;
+        ctx.strokeStyle = powerColor;
+        ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.arc(cannonBaseX, cannonBaseY, gaugeR, gaugeStart, fillEnd); ctx.stroke();
+        ctx.restore();
+
+        // Power tick marks
+        for (let t = 0; t <= 1; t += 0.25) {
+          const tickAngle = gaugeStart + t * gaugeArc;
+          const inner = gaugeR - 5;
+          const outer = gaugeR + 5;
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cannonBaseX + Math.cos(tickAngle) * inner, cannonBaseY + Math.sin(tickAngle) * inner);
+          ctx.lineTo(cannonBaseX + Math.cos(tickAngle) * outer, cannonBaseY + Math.sin(tickAngle) * outer);
+          ctx.stroke();
+        }
+
+        // Power endpoint dot
+        const dotX = cannonBaseX + Math.cos(fillEnd) * gaugeR;
+        const dotY = cannonBaseY + Math.sin(fillEnd) * gaugeR;
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = powerColor;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(dotX, dotY, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Power percentage text
+        ctx.fillStyle = powerColor;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${Math.round(power * 100)}%`, cannonBaseX, cannonBaseY + gaugeR + 14);
+
+        // ── Trajectory dotted preview ──
+        const maxPowerPrev = 14;
+        const simVx = Math.cos(angle) * power * maxPowerPrev;
+        const simVy = Math.sin(angle) * power * maxPowerPrev;
+        const simX0 = cannonBaseX + Math.cos(angle) * 32;
+        const simY0 = cannonBaseY + Math.sin(angle) * 32;
+        const dotCount = 18;
+        const dtSim = 3; // frames between dots
+        let sx = simX0, sy = simY0, svx = simVx, svy = simVy;
+        for (let d = 0; d < dotCount; d++) {
+          sx += svx * dtSim;
+          svy += GRAVITY * dtSim;
+          sy += svy * dtSim;
+          if (sy > h || sx > w + 20 || sx < -20) break;
+          const alpha = 1 - d / dotCount;
+          ctx.globalAlpha = alpha * 0.45;
+          ctx.fillStyle = powerColor;
+          ctx.beginPath();
+          ctx.arc(sx, sy, Math.max(1.5, 3 - d * 0.1), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
 
         ctx.fillStyle = CREAM + '20';
         ctx.font = '10px system-ui';

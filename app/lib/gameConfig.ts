@@ -13,7 +13,7 @@ export const GAME_DISPLAY_SLOTS: Record<string, number> = {
   cannon: 6,
   pendulum: 6,
   'angry-ball': 6,
-  // 'gyro-maze': 10,
+  'gyro-maze': 4,
   // 'gift-slice': 10,
   // 'stack-tower': 10,
   // 'whac-a-mole': 10,

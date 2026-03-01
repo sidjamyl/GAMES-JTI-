@@ -6,6 +6,7 @@ import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/pri
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
+import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
 /* ═══════════════════════════════════════════════
    GYRO MAZE — Themeable
@@ -135,17 +136,21 @@ function mazeToSegments(maze: boolean[][][], cols: number, rows: number): WallSe
 /* ── Pick exit cells and create outer walls with gaps ── */
 interface ExitDef { side: number; cellIndex: number; nx: number; ny: number; }
 
-function pickExits(cols: number, rows: number): ExitDef[] {
+function pickExits(cols: number, rows: number, count: number): ExitDef[] {
   const exits: ExitDef[] = [];
   const midCol = Math.floor(cols / 2);
   const midRow = Math.floor(rows / 2);
-  // Top exit (center) — equidistant from ball start
+  // Top exit (center)
   exits.push({ side: 0, cellIndex: midCol, nx: (midCol + 0.5) / cols, ny: -0.02 });
-  // Right exit (middle) — equidistant from ball start
+  // Right exit (middle)
   exits.push({ side: 1, cellIndex: midRow, nx: 1.02, ny: (midRow + 0.5) / rows });
-  // Bottom exit (center) — equidistant from ball start
+  // Bottom exit (center)
   exits.push({ side: 2, cellIndex: midCol, nx: (midCol + 0.5) / cols, ny: 1.02 });
-  return exits;
+  // Left exit (middle) — 4th exit
+  if (count >= 4) {
+    exits.push({ side: 3, cellIndex: midRow, nx: -0.02, ny: (midRow + 0.5) / rows });
+  }
+  return exits.slice(0, count);
 }
 
 function outerWalls(cols: number, rows: number, exits: ExitDef[]): WallSeg[] {
@@ -181,7 +186,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
   const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, TOBACCO, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
   const creamRgb = hexToRgb(CREAM);
   const tobaccoRgb = hexToRgb(TOBACCO);
-  const GOAL_COLORS = [GOLD, '#ef4444', '#3b82f6'];
+  const GOAL_COLORS = [GOLD, '#ef4444', '#3b82f6', '#22c55e'];
 
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
@@ -273,7 +278,8 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
   const generateNewMaze = useCallback(() => {
     const maze = generateMaze(MAZE_COLS, MAZE_ROWS);
-    const exits = pickExits(MAZE_COLS, MAZE_ROWS);
+    const goalCount = getDisplaySlots('gyro-maze');
+    const exits = pickExits(MAZE_COLS, MAZE_ROWS, goalCount);
     const internal = mazeToSegments(maze, MAZE_COLS, MAZE_ROWS);
     const outer = outerWalls(MAZE_COLS, MAZE_ROWS, exits);
 
@@ -306,12 +312,12 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
     wallsRef.current = [...filtered, ...outer];
 
-    // Create goals at exits — cycle through all available prizes
-    const available = prizes.filter(p => p.quantity > 0);
+    // Create goals at exits — proportional prize distribution
+    const distributed = shuffle(distributeProportionally(prizes, exits.length));
     const goals: GoalDef[] = exits.map((exit, i) => ({
       x: exit.nx,
       y: exit.ny,
-      prize: available.length > 0 ? available[i % available.length] : prizes[0],
+      prize: distributed[i] ?? prizes[0],
       color: GOAL_COLORS[i % GOAL_COLORS.length],
     }));
     goalsRef.current = goals;
@@ -325,6 +331,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       if (exit.side === 0) exitCells.add(`0,${exit.cellIndex}`);
       if (exit.side === 1) exitCells.add(`${exit.cellIndex},${MAZE_COLS - 1}`);
       if (exit.side === 2) exitCells.add(`${MAZE_ROWS - 1},${exit.cellIndex}`);
+      if (exit.side === 3) exitCells.add(`${exit.cellIndex},0`);
     }
     const holeCount = 12 + Math.floor(Math.random() * 6);
     for (let i = 0; i < holeCount; i++) {
@@ -356,6 +363,9 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       } else if (exit.side === 2) { // bottom exit
         const c = exit.cellIndex;
         nearCells = [[MAZE_ROWS - 2, c - 1], [MAZE_ROWS - 2, c + 1], [MAZE_ROWS - 3, c], [MAZE_ROWS - 4, c - 1], [MAZE_ROWS - 4, c + 1]];
+      } else if (exit.side === 3) { // left exit
+        const r = exit.cellIndex;
+        nearCells = [[r - 1, 1], [r + 1, 1], [r, 2], [r - 1, 3], [r + 1, 3]];
       }
       for (const [gr, gc] of nearCells) {
         if (gr >= 0 && gr < MAZE_ROWS && gc >= 0 && gc < MAZE_COLS &&
@@ -787,7 +797,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
                 <>
                   Un labyrinthe complexe vous attend.<br />
                   Évitez les trous et guidez la bille<br />
-                  vers un des 3 cadeaux ! {MAX_ATTEMPTS} vies.<br />
+                  vers un des 4 cadeaux ! {MAX_ATTEMPTS} vies.<br />
                   <span style={{ color: CREAM + '30' }} className="text-[11px]">Inclinez ou touchez pour diriger</span>
                 </>
               )}
