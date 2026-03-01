@@ -90,7 +90,6 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
 
   const GAMES = [
     { href: `${routePrefix}/plinko`, title: "Plinko", key: 'plinko', desc: "Lâchez la bille" },
-    { href: `${routePrefix}/gyro-maze`, title: "Gyro Maze", key: 'gyro-maze', desc: "Trouvez la sortie" },
     { href: `${routePrefix}/angry-ball`, title: "Angry Ball", key: 'angry-ball', desc: "Visez le cadeau" },
     { href: `${routePrefix}/pendulum`, title: "Pendulum", key: 'pendulum', desc: "Timing parfait" },
     { href: `${routePrefix}/cannon`, title: "Cannon", key: 'cannon', desc: "Tirez & détruisez" },
