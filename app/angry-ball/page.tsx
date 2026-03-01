@@ -121,27 +121,44 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   }
 
   // More obstacles for a real challenge (6-10)
+  // Helper: check if an obstacle AABB overlaps any cup or platform AABB (with margin)
+  const margin = 0.04; // extra clearance around cups
+  function overlapsAnyCup(ox: number, oy: number, ow: number, oh: number): boolean {
+    for (const c of cups) {
+      // Cup bounding box
+      const cLeft = c.x - c.w / 2 - margin;
+      const cRight = c.x + c.w / 2 + margin;
+      const cTop = c.y - margin;
+      const cBottom = c.y + c.h + 0.02 + margin; // include platform below
+      // Obstacle bounding box
+      const oLeft = ox - ow / 2;
+      const oRight = ox + ow / 2;
+      const oTop = oy - oh / 2;
+      const oBottom = oy + oh / 2;
+      if (oLeft < cRight && oRight > cLeft && oTop < cBottom && oBottom > cTop) return true;
+    }
+    return false;
+  }
+
   const numObs = 6 + Math.floor(Math.random() * 5);
   for (let i = 0; i < numObs; i++) {
     const isVertical = Math.random() > 0.5;
-    let ox: number, oy: number;
-    let tries = 0;
+    const ow = isVertical ? 0.020 + Math.random() * 0.012 : 0.065 + Math.random() * 0.050;
+    const oh = isVertical ? 0.12 + Math.random() * 0.10 : 0.018 + Math.random() * 0.012;
+    let ox = 0, oy = 0;
+    let valid = false;
 
-    do {
+    for (let tries = 0; tries < 60; tries++) {
       ox = 0.18 + Math.random() * 0.70;
       oy = 0.12 + Math.random() * 0.70;
-      tries++;
-    } while (
-      tries < 50 &&
-      cups.some(c => Math.abs(c.x - ox) < 0.08 && Math.abs(c.y - oy) < 0.09)
-    );
+      if (!overlapsAnyCup(ox, oy, ow, oh)) {
+        valid = true;
+        break;
+      }
+    }
+    if (!valid) continue; // skip this obstacle if no valid spot found
 
-    obstacles.push({
-      x: ox,
-      y: oy,
-      w: isVertical ? 0.020 + Math.random() * 0.012 : 0.065 + Math.random() * 0.050,
-      h: isVertical ? 0.12 + Math.random() * 0.10 : 0.018 + Math.random() * 0.012,
-    });
+    obstacles.push({ x: ox, y: oy, w: ow, h: oh });
   }
 
   return { cups, obstacles, platforms };
@@ -586,7 +603,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           }
         }
 
-        // Cup detection — proper collision
+        // Cup detection — proper collision with SIDE HITBOXES
         for (const cup of cupsRef.current) {
           const cp = toGame(cup.x, cup.y);
           const cupW = cup.w * g.w;
@@ -597,7 +614,28 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           const cupBottom = cp.y + cupH;
           const wallThick = 5 * dpr;
 
-          // Enter cup from the top — must be falling and within the opening
+          // ── OUTER side hitbox: bounce the ball off cup walls from outside ──
+          // Left wall (full height)
+          if (ball.y + br > cupTop - 2 * dpr && ball.y - br < cupBottom) {
+            // Approaching left wall from outside
+            if (ball.x + br > cupLeft - wallThick && ball.x + br < cupLeft + wallThick && ball.vx > 0
+                && !(ball.x > cupLeft + br * 0.3 && ball.x < cupRight - br * 0.3 && ball.y < cupTop + br)) {
+              ball.x = cupLeft - wallThick - br;
+              ball.vx = -Math.abs(ball.vx) * BOUNCE;
+              getSoundEngine().peg(0);
+              continue; // skip inner checks for this cup
+            }
+            // Approaching right wall from outside
+            if (ball.x - br < cupRight + wallThick && ball.x - br > cupRight - wallThick && ball.vx < 0
+                && !(ball.x > cupLeft + br * 0.3 && ball.x < cupRight - br * 0.3 && ball.y < cupTop + br)) {
+              ball.x = cupRight + wallThick + br;
+              ball.vx = Math.abs(ball.vx) * BOUNCE;
+              getSoundEngine().peg(0);
+              continue;
+            }
+          }
+
+          // ── Enter cup from the top — must be falling and within the opening ──
           if (ball.x > cupLeft + br * 0.15 && ball.x < cupRight - br * 0.15 &&
               ball.y + br > cupTop && ball.y < cupBottom && ball.vy > 0) {
             // Slow the ball inside the cup
@@ -620,7 +658,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
             }
           }
 
-          // Left wall collision
+          // ── Inner wall collisions (ball already inside cup) ──
           if (ball.y > cupTop + br * 0.5 && ball.y < cupBottom) {
             if (ball.x + br > cupLeft && ball.x + br < cupLeft + wallThick + br && ball.vx > 0) {
               ball.x = cupLeft - br;
@@ -628,7 +666,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
               ball.vx = -Math.abs(dot) * BOUNCE;
               getSoundEngine().peg(0);
             }
-            // Right wall collision
             if (ball.x - br < cupRight && ball.x - br > cupRight - wallThick - br && ball.vx < 0) {
               ball.x = cupRight + br;
               const dot = ball.vx;
