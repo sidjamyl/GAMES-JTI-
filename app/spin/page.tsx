@@ -5,428 +5,302 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import PrizeLegend from '../components/PrizeLegend';
 import Link from 'next/link';
-import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
+import { GameTheme, DEFAULT_THEME } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
-   SPIN & WIN — Wheel of Fortune
-   Proportional slices based on prize quantities.
-   Each slice shows emoji + product name.
+   SPIN & WIN — Wheel of Fortune  (v2)
+   Static canvas wheel + CSS-animated arrow pointer.
+   Center "JOUER" button triggers the spin.
    ═══════════════════════════════════════════════ */
 
-const FRICTION = 0.985;          // per-frame multiplier (lower = stops faster)
-const MIN_VELOCITY = 0.001;      // rad/frame — below this → stopped
-const MIN_SPINS = 4;             // minimum full rotations
-const MAX_EXTRA_SPINS = 3;       // random extra rotations on top
-const POINTER_ANGLE = -Math.PI / 2; // pointer at top (12 o'clock)
+const SPIN_MS   = 4200;   // CSS transition duration
+const MIN_SPINS = 5;
+const MAX_EXTRA = 3;
 
-interface Slice {
-  prize: Prize;
-  startAngle: number;
-  endAngle: number;
-  color: string;
-}
+const COLORS = [
+  '#2cc5d2', '#38c88e', '#fab320', '#f97903',
+  '#ca2231', '#79022c', '#0a4366', '#0a97d0',
+  '#6366f1', '#22c55e', '#f59e0b', '#ec4899',
+];
+
+interface SliceInfo { prize: Prize; startDeg: number; endDeg: number; color: string; }
 
 export default function Spin({ theme }: { theme?: GameTheme }) {
-  const {
-    GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA,
-    BG_DARK, BG_MID, BG_LIGHT, TOBACCO, MAHOGANY, routePrefix, mode,
-  } = theme ?? DEFAULT_THEME;
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode } = theme ?? DEFAULT_THEME;
   const isLight = mode === 'light';
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [prizes, setPrizes] = useState<Prize[]>([]);
-  const [phase, setPhase] = useState<GamePhase>('loading');
+  const slicesRef = useRef<SliceInfo[]>([]);
+  const winnerRef = useRef<Prize | null>(null);
+  const tickRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animRef   = useRef(false);
+
+  const [prizes,   setPrizes]   = useState<Prize[]>([]);
+  const [phase,    setPhase]    = useState<GamePhase>('loading');
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
+  const [arrowDeg, setArrowDeg] = useState(0);
+  const [spinning, setSpinning] = useState(false);
 
-  // Animation state
-  const stateRef = useRef({
-    slices: [] as Slice[],
-    angle: 0,          // current rotation in radians
-    velocity: 0,       // angular velocity rad/frame
-    spinning: false,
-    targetPrize: null as Prize | null,
-    spinStartTime: 0,
-  });
-
-  /* ─── Load prizes ─── */
+  /* ── Load prizes ───────────────────────────── */
   useEffect(() => {
-    fetchPrizes('STOCK_STW').then(data => {
-      const available = data.filter(p => p.quantity > 0);
-      if (available.length === 0) return;
-      setPrizes(available);
+    fetchPrizes('STOCK_STW').then(d => {
+      const ok = d.filter(p => p.quantity > 0);
+      if (!ok.length) return;
+      setPrizes(ok);
       setPhase('ready');
     });
   }, []);
 
-  /* ─── Build slices from prizes (proportional to quantity) ─── */
-  const buildSlices = useCallback((prizeList: Prize[]): Slice[] => {
-    const totalQty = prizeList.reduce((s, p) => s + p.quantity, 0);
-    if (totalQty === 0) return [];
-
-    // Color palette for slices
-    const palette = [
-      GOLD, AMBER, SIENNA, '#6366f1', '#ef4444', '#22c55e',
-      '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4',
-    ];
-
-    const slices: Slice[] = [];
-    let currentAngle = 0;
-
-    prizeList.forEach((prize, i) => {
-      const fraction = prize.quantity / totalQty;
-      const sweepAngle = fraction * Math.PI * 2;
-      slices.push({
-        prize,
-        startAngle: currentAngle,
-        endAngle: currentAngle + sweepAngle,
-        color: palette[i % palette.length],
-      });
-      currentAngle += sweepAngle;
+  /* ── Build slices (proportional to quantity) ── */
+  const buildSlices = useCallback((list: Prize[]): SliceInfo[] => {
+    const tot = list.reduce((s, p) => s + p.quantity, 0);
+    if (!tot) return [];
+    const out: SliceInfo[] = [];
+    let cur = 0;
+    list.forEach((prize, i) => {
+      const sweep = (prize.quantity / tot) * 360;
+      out.push({ prize, startDeg: cur, endDeg: cur + sweep, color: COLORS[i % COLORS.length] });
+      cur += sweep;
     });
+    return out;
+  }, []);
 
-    return slices;
-  }, [GOLD, AMBER, SIENNA]);
+  /* ── Draw static wheel on canvas ───────────── */
+  const paint = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
 
-  /* ─── Draw the wheel ─── */
-  const draw = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {
-    const state = stateRef.current;
-    const { slices, angle } = state;
-    if (slices.length === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const { width: cw, height: ch } = c.getBoundingClientRect();
+    c.width = cw * dpr; c.height = ch * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const cx = w / 2;
-    const cy = h / 2;
-    const radius = Math.min(cx, cy) * 0.82;
+    const cx = cw / 2, cy = ch / 2;
+    const R = Math.min(cx, cy) * 0.93;
+    const sl = slicesRef.current;
+    if (!sl.length) return;
+    ctx.clearRect(0, 0, cw, ch);
 
-    ctx.clearRect(0, 0, w, h);
+    /* outer shadow */
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.30)';
+    ctx.shadowBlur = 24;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = '#111'; ctx.fill();
+    ctx.restore();
 
-    // ── Draw outer ring glow
-    const glowGrad = ctx.createRadialGradient(cx, cy, radius * 0.95, cx, cy, radius * 1.08);
-    glowGrad.addColorStop(0, `rgba(${hexToRgb(GOLD)}, 0.3)`);
-    glowGrad.addColorStop(1, 'transparent');
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 1.08, 0, Math.PI * 2);
-    ctx.fillStyle = glowGrad;
-    ctx.fill();
+    /* slices */
+    sl.forEach(s => {
+      const a0 = (s.startDeg - 90) * Math.PI / 180;
+      const a1 = (s.endDeg   - 90) * Math.PI / 180;
+      const mid = (a0 + a1) / 2;
+      const sweep = a1 - a0;
 
-    // ── Draw slices
-    slices.forEach((slice) => {
-      const start = slice.startAngle + angle;
-      const end = slice.endAngle + angle;
-      const mid = (start + end) / 2;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1); ctx.closePath();
+      ctx.fillStyle = s.color; ctx.fill();
 
-      // Slice sector
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, start, end);
-      ctx.closePath();
+      /* depth overlay */
+      const dg = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R);
+      dg.addColorStop(0, 'rgba(255,255,255,0.10)');
+      dg.addColorStop(0.55, 'rgba(255,255,255,0)');
+      dg.addColorStop(1, 'rgba(0,0,0,0.12)');
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a0, a1); ctx.closePath();
+      ctx.fillStyle = dg; ctx.fill();
 
-      // Fill with gradient
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      grad.addColorStop(0, `rgba(${hexToRgb(slice.color)}, 0.25)`);
-      grad.addColorStop(0.4, `rgba(${hexToRgb(slice.color)}, 0.5)`);
-      grad.addColorStop(1, `rgba(${hexToRgb(slice.color)}, 0.8)`);
-      ctx.fillStyle = grad;
-      ctx.fill();
+      /* divider */
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a0) * R, cy + Math.sin(a0) * R);
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1.5; ctx.stroke();
 
-      // Border
-      ctx.strokeStyle = `rgba(0,0,0,0.3)`;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // ── Text (emoji + name) along the slice
-      const sweepAngle = slice.endAngle - slice.startAngle;
-      const textRadius = radius * 0.62;
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(mid);
-
-      // Emoji
-      const emojiSize = Math.max(16, Math.min(28, sweepAngle * radius * 0.2));
-      ctx.font = `${emojiSize}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(slice.prize.emoji, textRadius, 0);
-
-      // Name — only show if slice is wide enough
-      if (sweepAngle > 0.3) {
-        const nameSize = Math.max(9, Math.min(14, sweepAngle * radius * 0.08));
-        ctx.font = `bold ${nameSize}px system-ui, sans-serif`;
-        ctx.fillStyle = '#fff';
-        ctx.shadowColor = 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = 3;
-        ctx.fillText(slice.prize.name, textRadius, emojiSize * 0.7);
+      /* emoji + name */
+      const tR = R * 0.58;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(mid);
+      const eS = Math.max(18, Math.min(30, sweep * R * 0.18));
+      ctx.font = `${eS}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(s.prize.emoji, tR, 0);
+      if (sweep > 0.35) {
+        const nS = Math.max(8, Math.min(12, sweep * R * 0.07));
+        ctx.font = `700 ${nS}px system-ui,sans-serif`;
+        ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3;
+        ctx.fillText(s.prize.name, tR, eS * 0.65);
         ctx.shadowBlur = 0;
       }
-
       ctx.restore();
     });
 
-    // ── Center hub
-    const hubRadius = radius * 0.12;
-    const hubGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, hubRadius);
-    hubGrad.addColorStop(0, GOLD_BRIGHT);
-    hubGrad.addColorStop(0.6, GOLD);
-    hubGrad.addColorStop(1, AMBER);
-    ctx.beginPath();
-    ctx.arc(cx, cy, hubRadius, 0, Math.PI * 2);
-    ctx.fillStyle = hubGrad;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(0,0,0,0.3)`;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Hub text
-    ctx.fillStyle = BG_DARK;
-    ctx.font = `bold ${hubRadius * 0.6}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SPIN', cx, cy);
-
-    // ── Outer ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // ── Tick marks around the wheel
-    const tickCount = slices.length * 3;
-    for (let i = 0; i < tickCount; i++) {
-      const tickAngle = (i / tickCount) * Math.PI * 2;
-      const innerR = radius - 6;
-      const outerR = radius;
+    /* LED dots */
+    const dots = Math.max(sl.length * 4, 24);
+    for (let i = 0; i < dots; i++) {
+      const a = (i / dots) * Math.PI * 2 - Math.PI / 2;
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(tickAngle) * innerR, cy + Math.sin(tickAngle) * innerR);
-      ctx.lineTo(cx + Math.cos(tickAngle) * outerR, cy + Math.sin(tickAngle) * outerR);
-      ctx.strokeStyle = `rgba(${hexToRgb(GOLD)}, 0.5)`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.arc(cx + Math.cos(a) * (R - 5), cy + Math.sin(a) * (R - 5), 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.25)';
+      ctx.fill();
     }
 
-    // ── Pointer (top, 12 o'clock)
-    const ptrLen = radius * 0.16;
-    const ptrWidth = radius * 0.07;
-    const ptrY = cy - radius - 2;
+    /* outer ring */
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 3; ctx.stroke();
+  }, []);
 
-    ctx.beginPath();
-    ctx.moveTo(cx, ptrY + ptrLen);
-    ctx.lineTo(cx - ptrWidth, ptrY - 4);
-    ctx.lineTo(cx + ptrWidth, ptrY - 4);
-    ctx.closePath();
+  /* init + redraw */
+  useEffect(() => { if (!prizes.length) return; slicesRef.current = buildSlices(prizes); paint(); }, [prizes, buildSlices, paint]);
+  useEffect(() => { const h = () => paint(); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, [paint]);
 
-    const ptrGrad = ctx.createLinearGradient(cx, ptrY - 4, cx, ptrY + ptrLen);
-    ptrGrad.addColorStop(0, GOLD_BRIGHT);
-    ptrGrad.addColorStop(1, AMBER);
-    ctx.fillStyle = ptrGrad;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(0,0,0,0.3)`;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Pointer circle
-    ctx.beginPath();
-    ctx.arc(cx, ptrY - 2, ptrWidth * 0.6, 0, Math.PI * 2);
-    ctx.fillStyle = GOLD_BRIGHT;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(0,0,0,0.2)`;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-  }, [GOLD, GOLD_BRIGHT, AMBER, BG_DARK, CREAM]);
-
-  /* ─── Animation loop ─── */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || prizes.length === 0) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const state = stateRef.current;
-    state.slices = buildSlices(prizes);
-
-    let rafId: number;
-    let lastTickSliceIdx = -1;
-
-    const setupCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      return { w: rect.width, h: rect.height };
+  /* ── Tick sounds ───────────────────────────── */
+  const clearTicks = useCallback(() => { if (tickRef.current) clearTimeout(tickRef.current); }, []);
+  const startTicks = useCallback(() => {
+    let d = 55;
+    const go = () => {
+      if (d > 400) return;
+      try { getSoundEngine().peg(Math.floor(Math.random() * 5)); } catch {}
+      d *= 1.06;
+      tickRef.current = setTimeout(go, d);
     };
+    go();
+  }, []);
+  useEffect(() => () => clearTicks(), [clearTicks]);
 
-    const loop = () => {
-      const { w, h } = setupCanvas();
+  /* ── End spin ──────────────────────────────── */
+  const endSpin = useCallback(() => {
+    if (!animRef.current) return;
+    clearTicks();
+    setSpinning(false);
+    animRef.current = false;
+    setTimeout(() => {
+      try { getSoundEngine().victory(); } catch {}
+      setWonPrize(winnerRef.current);
+      setPhase('victory');
+    }, 300);
+  }, [clearTicks]);
 
-      if (state.spinning) {
-        state.angle += state.velocity;
-        state.velocity *= FRICTION;
-
-        // Tick sound when crossing a slice boundary
-        const normalizedAngle = ((POINTER_ANGLE - state.angle) % (Math.PI * 2) + Math.PI * 4) % (Math.PI * 2);
-        const currentSliceIdx = state.slices.findIndex(s => normalizedAngle >= s.startAngle && normalizedAngle < s.endAngle);
-        if (currentSliceIdx !== -1 && currentSliceIdx !== lastTickSliceIdx) {
-          lastTickSliceIdx = currentSliceIdx;
-          try { getSoundEngine().peg(currentSliceIdx % 5); } catch {}
-        }
-
-        if (Math.abs(state.velocity) < MIN_VELOCITY) {
-          state.velocity = 0;
-          state.spinning = false;
-
-          // Determine which slice the pointer landed on
-          const finalAngle = ((POINTER_ANGLE - state.angle) % (Math.PI * 2) + Math.PI * 4) % (Math.PI * 2);
-          const landedSlice = state.slices.find(
-            s => finalAngle >= s.startAngle && finalAngle < s.endAngle,
-          ) || state.slices[0];
-
-          // Short delay then victory
-          setTimeout(() => {
-            try { getSoundEngine().victory(); } catch {}
-            setWonPrize(landedSlice.prize);
-            setPhase('victory');
-          }, 400);
-        }
-      }
-
-      draw(ctx, w, h);
-      rafId = requestAnimationFrame(loop);
-    };
-
-    rafId = requestAnimationFrame(loop);
-
-    const onResize = () => setupCanvas();
-    window.addEventListener('resize', onResize);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', onResize);
-    };
-  }, [prizes, buildSlices, draw]);
-
-  /* ─── Start spin ─── */
-  const startSpin = useCallback(() => {
-    if (phase !== 'ready') return;
-    const state = stateRef.current;
-    if (state.spinning) return;
-
+  /* ── Start spin ────────────────────────────── */
+  const spin = useCallback(() => {
+    if (phase !== 'ready' || animRef.current) return;
     setPhase('playing');
+    setSpinning(true);
+    animRef.current = true;
 
-    // Pick the winning prize (weighted by quantity)
-    const totalQty = prizes.reduce((s, p) => s + p.quantity, 0);
-    let rand = Math.random() * totalQty;
-    let winner = prizes[prizes.length - 1];
-    for (const p of prizes) {
-      rand -= p.quantity;
-      if (rand <= 0) { winner = p; break; }
-    }
-    state.targetPrize = winner;
+    /* weighted random winner */
+    const tot = prizes.reduce((s, p) => s + p.quantity, 0);
+    let r = Math.random() * tot, w = prizes[prizes.length - 1];
+    for (const p of prizes) { r -= p.quantity; if (r <= 0) { w = p; break; } }
+    winnerRef.current = w;
 
-    // Calculate target angle so pointer lands on winning slice
-    const winSlice = state.slices.find(s => s.prize.id === winner.id);
-    if (!winSlice) return;
-
-    // Random position within the slice (avoid edges)
-    const sliceMid = (winSlice.startAngle + winSlice.endAngle) / 2;
-    const sliceRange = (winSlice.endAngle - winSlice.startAngle) * 0.6;
-    const targetInSlice = sliceMid + (Math.random() - 0.5) * sliceRange;
-
-    // Pointer is at POINTER_ANGLE. We need: POINTER_ANGLE - (angle + totalRotation) ≡ targetInSlice (mod 2π)
-    // → totalRotation = POINTER_ANGLE - targetInSlice - state.angle + N*2π
-    const fullSpins = (MIN_SPINS + Math.random() * MAX_EXTRA_SPINS) * Math.PI * 2;
-    const targetTotalAngle = POINTER_ANGLE - targetInSlice - state.angle + fullSpins;
-
-    // Calculate initial velocity needed: v₀ = totalAngle * (1 - FRICTION) / (1 - FRICTION^N)
-    // Approximate: since FRICTION is close to 1, use geometric sum
-    // total = v₀ / (1 - FRICTION)
-    state.velocity = targetTotalAngle * (1 - FRICTION);
-    state.spinning = true;
-    state.spinStartTime = Date.now();
+    /* target angle */
+    const ws = slicesRef.current.find(s => s.prize.id === w.id)!;
+    const mid = (ws.startDeg + ws.endDeg) / 2;
+    const jitter = (Math.random() - 0.5) * (ws.endDeg - ws.startDeg) * 0.55;
+    const target = mid + jitter;
+    const full = (MIN_SPINS + Math.random() * MAX_EXTRA) * 360;
+    const mod = ((arrowDeg % 360) + 360) % 360;
+    const extra = ((target - mod) % 360 + 360) % 360;
+    setArrowDeg(prev => prev + full + extra);
 
     try { getSoundEngine().swoosh(); } catch {}
-  }, [phase, prizes]);
+    startTicks();
 
-  /* ─── Victory screen ─── */
-  if (phase === 'victory' && wonPrize) {
-    return (
-      <VictoryScreen
-        prize={wonPrize}
-        onClose={() => window.location.reload()}
-        accentFrom={GOLD}
-        accentTo={AMBER}
-      />
-    );
-  }
+    /* safety fallback */
+    setTimeout(() => { if (animRef.current) endSpin(); }, SPIN_MS + 800);
+  }, [phase, prizes, arrowDeg, startTicks, endSpin]);
+
+  /* ── Render ────────────────────────────────── */
+  if (phase === 'victory' && wonPrize)
+    return <VictoryScreen prize={wonPrize} onClose={() => window.location.reload()} accentFrom={GOLD} accentTo={AMBER} />;
 
   return (
-    <div
-      className="relative w-full overflow-hidden"
-      style={{
-        height: '100dvh',
-        background: `radial-gradient(ellipse at 50% 40%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)`,
-      }}
-    >
-      {/* Back to menu */}
-      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
+    <div className="relative w-full overflow-hidden flex flex-col items-center justify-center"
+      style={{ height: '100dvh', background: `radial-gradient(ellipse at 50% 40%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}>
+
+      {/* Back */}
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90"
+        style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
-      {/* Header — only during ready */}
+      <PrizeLegend prizes={prizes} isLight={isLight} />
+
+      {/* Header */}
       {phase === 'ready' && (
-        <div
-          className="absolute top-3 left-0 right-0 text-center z-10"
-          style={{ animation: 'fadeInUp 0.4s ease-out both' }}
-        >
-          <h1
-            className="text-[16px] font-bold tracking-[-0.01em]"
-            style={{ color: CREAM }}
-          >
-            Spin & Win
-          </h1>
-          <p style={{ color: `${CREAM}45` }} className="text-[11px] mt-0.5">
-            Tournez la roue pour gagner
-          </p>
+        <div className="absolute top-4 left-0 right-0 text-center z-10" style={{ animation: 'fadeInUp 0.4s ease-out both' }}>
+          <h1 className="text-[18px] font-bold tracking-[-0.01em]" style={{ color: CREAM }}>Spin & Win</h1>
+          <p style={{ color: `${CREAM}45` }} className="text-[11px] mt-0.5">Tournez la roue pour gagner</p>
         </div>
       )}
 
-      {/* Canvas — fills available space */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ touchAction: 'none' }}
-      />
+      {/* ── Wheel assembly ── */}
+      <div className="relative" style={{ width: 'min(82vw, 62vh, 380px)', aspectRatio: '1' }}>
 
-      {/* Spin button overlay */}
-      {phase === 'ready' && (
-        <button
-          onClick={startSpin}
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 px-8 py-3 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
+        {/* Static canvas wheel */}
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded-full" />
+
+        {/* Rotating arrow layer */}
+        <div className="absolute inset-0 pointer-events-none"
+          onTransitionEnd={endSpin}
           style={{
-            background: GOLD,
-            color: '#ffffff',
-            boxShadow: `0 4px 20px -4px ${GOLD}50`,
-            animation: 'fadeInUp 0.5s ease-out 0.3s both',
-          }}
-        >
-          Tourner la roue
-        </button>
-      )}
+            transform: `rotate(${arrowDeg}deg)`,
+            transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(0.12,0.75,0.22,1)` : 'none',
+          }}>
+          <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '-4%' }}>
+            <svg width="30" height="38" viewBox="0 0 30 38" fill="none">
+              <defs>
+                <linearGradient id="aw" x1="15" y1="0" x2="15" y2="38" gradientUnits="userSpaceOnUse">
+                  <stop stopColor={GOLD_BRIGHT} />
+                  <stop offset="1" stopColor={GOLD} />
+                </linearGradient>
+                <filter id="as"><feDropShadow dx="0" dy="1" stdDeviation="1.5" floodOpacity="0.25" /></filter>
+              </defs>
+              <polygon points="15,38 3,10 27,10" fill="url(#aw)" filter="url(#as)" />
+              <circle cx="15" cy="10" r="6" fill={GOLD_BRIGHT} stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
+            </svg>
+          </div>
+        </div>
 
-      {/* Loading state */}
+        {/* Center button */}
+        <button onClick={spin} disabled={phase !== 'ready'}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center z-20 transition-transform duration-150 active:scale-95"
+          style={{
+            width: '26%', aspectRatio: '1',
+            background: `radial-gradient(circle at 38% 38%, ${GOLD_BRIGHT}, ${GOLD})`,
+            boxShadow: `0 4px 20px -4px ${GOLD}90, inset 0 1px 1px rgba(255,255,255,0.25)`,
+            border: '3px solid rgba(255,255,255,0.22)',
+            cursor: phase === 'ready' ? 'pointer' : 'default',
+          }}>
+          <span className="text-white font-bold text-center leading-none select-none"
+            style={{ fontSize: 'clamp(9px, 2.4vw, 13px)', textShadow: '0 1px 2px rgba(0,0,0,0.3)', letterSpacing: '0.06em' }}>
+            {phase === 'ready' ? 'JOUER' : '···'}
+          </span>
+        </button>
+
+        {/* Pulse ring */}
+        {phase === 'ready' && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="rounded-full" style={{
+              width: '26%', aspectRatio: '1',
+              border: `2px solid ${GOLD}`,
+              animation: 'spinPulseRing 2s ease-in-out infinite',
+            }} />
+          </div>
+        )}
+      </div>
+
+      {/* Loading */}
       {phase === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div
-            className="w-8 h-8 border-2 rounded-full animate-spin"
-            style={{
-              borderColor: `${GOLD}30`,
-              borderTopColor: GOLD,
-            }}
-          />
+          <div className="w-8 h-8 border-2 rounded-full animate-spin" style={{ borderColor: `${GOLD}30`, borderTopColor: GOLD }} />
         </div>
       )}
+
+      <style>{`
+        @keyframes spinPulseRing {
+          0%, 100% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.25); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

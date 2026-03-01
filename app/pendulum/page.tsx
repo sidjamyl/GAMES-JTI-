@@ -5,6 +5,7 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import PrizeLegend from '../components/PrizeLegend';
 import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
@@ -655,6 +656,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
       <Link href={T.routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
       </Link>
+      <PrizeLegend prizes={prizes} isLight={isLight} />
       {phase === 'playing' && (
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }}
           onTouchStart={handleTap} onMouseDown={handleTap} />
