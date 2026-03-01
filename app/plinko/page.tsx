@@ -85,21 +85,18 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
   }, []);
 
   const computeGeometry = useCallback((w: number, h: number) => {
-    // Adapt peg density to screen size:
-    // Phone (~375px) = base 9 cols / 10 rows
-    // Tablet (~768px) = ~14 cols / 14 rows
-    // Desktop (~1200px+) = ~18 cols / 16 rows
-    // Target: peg horizontal spacing ~38-42px so ball always bounces
-    const TARGET_SPACING = 40;
-    const boardPadding = PEG_RADIUS + 4; // minimal edge margin so pegs fill full width
+    // Slot count = exactly the number of available prizes
+    const available = prizes.filter(p => p.quantity > 0);
+    const slotCount = Math.max(2, available.length);
+    const pegCols = slotCount - 1;
+
+    const boardPadding = PEG_RADIUS + 4;
     const boardWidth = w - boardPadding * 2;
     const boardTop = h * 0.12;
     const boardBottom = h * 0.78;
     const boardHeight = boardBottom - boardTop;
 
-    const pegCols = Math.max(BASE_PEG_COLS, Math.round(boardWidth / TARGET_SPACING));
-    const pegRows = Math.max(BASE_PEG_ROWS, Math.round(boardHeight / TARGET_SPACING));
-    const slotCount = pegCols + 1;
+    const pegRows = Math.max(BASE_PEG_ROWS, Math.round(boardHeight / (boardWidth / (pegCols - 1 || 1))));
     gridRef.current = { pegRows, pegCols, slotCount };
 
     const pegSpacingX = boardWidth / (pegCols - 1);
@@ -122,7 +119,7 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
       }
     }
     pegsRef.current = pegs;
-  }, []);
+  }, [prizes]);
 
   const resize = useCallback(() => {
     const canvas = canvasRef.current;
@@ -170,17 +167,12 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     };
   }, []);
 
-  // Place ALL prizes in the slots — cycling through the full list
+  // 1 slot = 1 prize (exact match)
   const assignSlotPrizes = useCallback(() => {
-    const { slotCount } = gridRef.current;
     const available = prizes.filter(p => p.quantity > 0);
     if (available.length === 0) return;
-    const slots: (Prize | null)[] = [];
-    for (let i = 0; i < slotCount; i++) {
-      slots.push(available[i % available.length]);
-    }
-    setSlotPrizes(slots);
-    slotPrizesRef.current = slots;
+    setSlotPrizes(available);
+    slotPrizesRef.current = available;
   }, [prizes]);
 
   const dropBall = useCallback(
