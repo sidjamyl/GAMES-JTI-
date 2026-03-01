@@ -5,6 +5,7 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
@@ -29,7 +30,7 @@ interface Slice {
 export default function Spin({ theme }: { theme?: GameTheme }) {
   const {
     GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA,
-    BG_DARK, BG_MID, BG_LIGHT, TOBACCO, MAHOGANY,
+    BG_DARK, BG_MID, BG_LIGHT, TOBACCO, MAHOGANY, routePrefix,
   } = theme ?? DEFAULT_THEME;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -368,6 +369,10 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
         background: `radial-gradient(ellipse at 50% 40%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)`,
       }}
     >
+      {/* Back to menu */}
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      </Link>
       {/* Header — only during ready */}
       {phase === 'ready' && (
         <div

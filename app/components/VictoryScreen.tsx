@@ -11,6 +11,8 @@ interface Props {
   onClose?: () => void;
   accentFrom?: string;
   accentTo?: string;
+  /** When true, shows a "you lost but here's a consolation" message instead of "you won" */
+  isConsolation?: boolean;
 }
 
 export default function VictoryScreen({
@@ -18,6 +20,7 @@ export default function VictoryScreen({
   onClose,
   accentFrom = '#d4a843',
   accentTo = '#c9842b',
+  isConsolation = false,
 }: Props) {
   const [visible, setVisible] = useState(false);
   const [wlStatus, setWlStatus] = useState<string>('');
@@ -57,7 +60,7 @@ export default function VictoryScreen({
         }}
       />
 
-      <Confetti count={220} />
+      {!isConsolation && <Confetti count={220} />}
 
       {/* Card */}
       <div
@@ -102,12 +105,12 @@ export default function VictoryScreen({
             </div>
           </div>
 
-          <p className="text-sm font-semibold tracking-widest uppercase" style={{ color: accentFrom }}>
-            Félicitations
+          <p className="text-sm font-semibold tracking-widest uppercase" style={{ color: isConsolation ? '#6b7280' : accentFrom }}>
+            {isConsolation ? 'Pas de chance...' : 'Félicitations'}
           </p>
 
           <h1 className="text-[26px] font-extrabold text-gray-900 text-center leading-tight tracking-tight">
-            Vous avez gagné !
+            {isConsolation ? 'Perdu ! Mais tenez…' : 'Vous avez gagné !'}
           </h1>
 
           <div

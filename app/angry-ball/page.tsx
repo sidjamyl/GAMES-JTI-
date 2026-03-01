@@ -5,6 +5,7 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
@@ -15,16 +16,16 @@ import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameC
    No rigging at all.
    ═══════════════════════════════════════════ */
 
-// Physics constants — tuned for natural feel
-const GRAVITY = 0.35;
+// Physics constants — tuned for challenging feel
+const GRAVITY = 0.42;
 const BALL_RADIUS = 13;
-const BOUNCE = 0.45;
-const GROUND_FRICTION = 0.88;
+const BOUNCE = 0.35;
+const GROUND_FRICTION = 0.85;
 const MAX_PULL = 120;
-const LAUNCH_MULTIPLIER = 0.18;
+const LAUNCH_MULTIPLIER = 0.17;
 const GAME_ASPECT = 1.9;
 const MAX_ATTEMPTS = 3;
-const RESTITUTION = 0.35;
+const RESTITUTION = 0.30;
 
 const SLING_ANCHOR = { x: 0.10, y: 0.58 };
 
@@ -71,9 +72,9 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const distributed = shuffle(distributeProportionally(allPrizes, displaySlots));
   const total = Math.max(1, distributed.length);
 
-  // Smaller, fixed cup size
-  const cupW = 0.055;
-  const cupH = 0.065;
+  // Smaller cup size for more challenge
+  const cupW = 0.045;
+  const cupH = 0.055;
 
   // Random placement zone (right 2/3 of screen)
   const zoneMinX = 0.30;
@@ -177,31 +178,31 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   // ── Obstacles only AFTER the launch clear zone ──
   // MID ZONE: between cup clusters
   const midMinX = Math.max(launchClearX + 0.02, 0.32);
-  const midCount = 5 + Math.floor(Math.random() * 3); // 5-7
+  const midCount = 7 + Math.floor(Math.random() * 4); // 7-10
   for (let i = 0; i < midCount; i++) {
     const isVert = Math.random() > 0.5;
     const ox = midMinX + Math.random() * (0.60 - midMinX);
     const oy = 0.10 + Math.random() * 0.72;
     if (isVert) {
-      tryPlace(ox, oy, 0.016 + Math.random() * 0.008, 0.07 + Math.random() * 0.05, 0.10);
+      tryPlace(ox, oy, 0.018 + Math.random() * 0.010, 0.08 + Math.random() * 0.06, 0.10);
     } else {
-      tryPlace(ox, oy, 0.05 + Math.random() * 0.04, 0.014 + Math.random() * 0.005, 0.10);
+      tryPlace(ox, oy, 0.06 + Math.random() * 0.05, 0.016 + Math.random() * 0.006, 0.10);
     }
   }
 
   // FAR ZONE: bounce ramps beyond most cups
-  const farCount = 2 + Math.floor(Math.random() * 2); // 2-3
+  const farCount = 3 + Math.floor(Math.random() * 3); // 3-5
   for (let i = 0; i < farCount; i++) {
     const ox = 0.65 + Math.random() * 0.23;
     const oy = 0.12 + Math.random() * 0.68;
-    tryPlace(ox, oy, 0.04 + Math.random() * 0.03, 0.014 + Math.random() * 0.004, 0.10);
+    tryPlace(ox, oy, 0.05 + Math.random() * 0.04, 0.016 + Math.random() * 0.005, 0.10);
   }
 
   return { cups, obstacles, platforms };
 }
 
 export default function AngryBall({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix } = { ...DEFAULT_THEME, ...theme };
   const goldRgb = hexToRgb(GOLD);
   const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#b45309'];
 
@@ -212,7 +213,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
   const [attempts, setAttempts] = useState(0);
   const [isPortrait, setIsPortrait] = useState(false);
   const isPortraitRef = useRef(false);
-  const [showLanded, setShowLanded] = useState(false);
   const [gameOver, setGameOver] = useState(false);
 
   const ballRef = useRef<BallState>({
@@ -693,8 +693,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
               ball.vx = 0; ball.vy = 0;
               getSoundEngine().swish();
 
-              setShowLanded(true);
-              setTimeout(() => setShowLanded(false), 1000);
               if (cup.prize) {
                 setWonPrize(cup.prize);
                 setTimeout(() => { if (phaseRef.current === 'playing') setPhase('victory'); }, 1200);
@@ -886,7 +884,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
     setWonPrize(null);
     setAttempts(0);
     attemptsRef.current = 0;
-    setShowLanded(false);
     setGameOver(false);
     setPhase('playing');
     setTimeout(() => startLoop(), 50);
@@ -996,6 +993,10 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
   return (
     <div style={wrapperStyle}>
         <div className="relative w-full h-full" style={{ background: BG_DARK }}>
+        {/* Back to menu */}
+        <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+        </Link>
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full"
@@ -1008,14 +1009,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           onMouseLeave={onPointerUp}
           style={{ touchAction: 'none' }}
         />
-
-        {showLanded && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none" style={{ animation: 'fadeInUp 0.3s ease-out both' }}>
-            <span className="text-3xl font-black tracking-tight" style={{ background: `linear-gradient(135deg, ${GOLD}, ${AMBER})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              DANS LE TROU! 🎯
-            </span>
-          </div>
-        )}
 
         {/* Ready screen */}
         {phase === 'ready' && (
@@ -1060,6 +1053,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
             onClose={() => { cancelAnimationFrame(animRef.current); setPhase('ready'); }}
             accentFrom={GOLD}
             accentTo={AMBER}
+            isConsolation={gameOver}
           />
         )}
       </div>

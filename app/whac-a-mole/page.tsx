@@ -5,6 +5,7 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectRandomPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME } from '../lib/themes';
 
 /* ═══════════════════════════════════════════════
@@ -32,7 +33,7 @@ interface Hole {
 }
 
 export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY, routePrefix } = { ...DEFAULT_THEME, ...theme };
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
@@ -175,6 +176,10 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
         padding: '0 16px',
       }}
     >
+      {/* Back to menu */}
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      </Link>
       {/* Header */}
       <div className="w-full max-w-[380px] flex flex-col items-center pt-10 pb-2" style={{ animation: 'fadeInUp 0.5s ease-out both', zIndex: 10 }}>
         <h1 className="text-[28px] font-extrabold tracking-tight text-center"

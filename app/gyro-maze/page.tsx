@@ -5,6 +5,7 @@ import { Prize, GamePhase } from '../lib/types';
 import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/prizes';
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
+import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
@@ -183,7 +184,7 @@ function outerWalls(cols: number, rows: number, exits: ExitDef[]): WallSeg[] {
 }
 
 export default function GyroMaze({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, TOBACCO, BG_DARK, BG_MID, BG_LIGHT } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, TOBACCO, BG_DARK, BG_MID, BG_LIGHT, routePrefix } = { ...DEFAULT_THEME, ...theme };
   const creamRgb = hexToRgb(CREAM);
   const tobaccoRgb = hexToRgb(TOBACCO);
   const GOAL_COLORS = [GOLD, '#ef4444', '#3b82f6', '#22c55e'];
@@ -739,6 +740,10 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
       className="game-container noise-overlay flex flex-col items-center"
       style={{ background: `radial-gradient(ellipse at 50% 20%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}
     >
+      {/* Back to menu */}
+      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'rgba(255,255,255,0.7)' }}><path d="M15 18l-6-6 6-6" /></svg>
+      </Link>
       {/* Header */}
       {phase === 'playing' && (
       <div className="absolute top-2 left-0 right-0 flex flex-col items-center z-10 pointer-events-none" style={{ animation: 'fadeInUp 0.5s ease-out both' }}>
@@ -828,7 +833,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
       {/* Victory */}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} />
       )}
     </div>
   );
