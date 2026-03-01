@@ -171,6 +171,14 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     const available = prizes.filter(p => p.quantity > 0);
     if (available.length === 0) return;
 
+    // Expand each prize by its full quantity
+    const expanded: Prize[] = [];
+    available.forEach(prize => {
+      for (let i = 0; i < prize.quantity; i++) {
+        expanded.push(prize);
+      }
+    });
+
     // Build array of slot indices and shuffle
     const indices = Array.from({ length: slotCount }, (_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
@@ -179,12 +187,11 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     }
 
     const slots: (Prize | null)[] = new Array(slotCount).fill(null);
-    // Place each prize in a unique random slot
-    available.forEach((prize, idx) => {
-      if (idx < slotCount) {
-        slots[indices[idx]] = prize;
-      }
-    });
+    // Place prizes in random slots (up to slotCount)
+    const toPlace = Math.min(expanded.length, slotCount);
+    for (let i = 0; i < toPlace; i++) {
+      slots[indices[i]] = expanded[i];
+    }
 
     setSlotPrizes(slots);
     slotPrizesRef.current = slots;
