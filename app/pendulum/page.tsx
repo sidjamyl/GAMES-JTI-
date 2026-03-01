@@ -308,153 +308,117 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
 
       /* ═══ RENDER ═══ */
 
-      // Support beam — industrial I-beam
-      const beamY = pivotY - 12;
-      const beamH = 20;
+      // Support rail — slim, clean bar with theme color accent
+      const beamY = pivotY - 6;
+      const beamH = 10;
       const beamGrad = ctx.createLinearGradient(0, beamY, 0, beamY + beamH);
-      beamGrad.addColorStop(0, '#5a4a60');
-      beamGrad.addColorStop(0.3, '#7a6a80');
-      beamGrad.addColorStop(0.7, '#6a5a70');
-      beamGrad.addColorStop(1, '#3a2a40');
+      beamGrad.addColorStop(0, isLight ? '#e8e0d8' : '#4a4050');
+      beamGrad.addColorStop(0.5, isLight ? '#d4c8bc' : '#5a5060');
+      beamGrad.addColorStop(1, isLight ? '#c0b0a4' : '#3a3040');
       ctx.fillStyle = beamGrad;
-      ctx.fillRect(w * 0.08, beamY, w * 0.84, beamH);
-      // Top/bottom flanges
-      ctx.fillStyle = '#8a7a90';
-      ctx.fillRect(w * 0.08, beamY, w * 0.84, 3);
-      ctx.fillRect(w * 0.08, beamY + beamH - 3, w * 0.84, 3);
-      // Rivets
-      for (let rx = w * 0.12; rx < w * 0.9; rx += 28) {
-        const rivGrad = ctx.createRadialGradient(rx - 0.5, beamY + beamH / 2 - 0.5, 0, rx, beamY + beamH / 2, 3.5);
-        rivGrad.addColorStop(0, '#b0a0b8');
-        rivGrad.addColorStop(1, '#5a4a60');
-        ctx.fillStyle = rivGrad;
-        ctx.beginPath(); ctx.arc(rx, beamY + beamH / 2, 3.5, 0, Math.PI * 2); ctx.fill();
-      }
-
-      // Pivot mount
-      const pivGrad = ctx.createRadialGradient(pivotX - 1, pivotY - 1, 0, pivotX, pivotY, 7);
-      pivGrad.addColorStop(0, '#c0b0c8');
-      pivGrad.addColorStop(0.5, '#8a7a90');
-      pivGrad.addColorStop(1, '#4a3a50');
-      ctx.fillStyle = pivGrad;
-      ctx.beginPath(); ctx.arc(pivotX, pivotY, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(w * 0.06, beamY, w * 0.88, beamH, 5);
+      ctx.fill();
+      // Subtle edge highlight
+      ctx.strokeStyle = isLight ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.roundRect(w * 0.06, beamY, w * 0.88, beamH, 5);
       ctx.stroke();
 
-      /* ── ROPE (chain with extension) ── */
-      const chainSegs = 14 + Math.floor(pend.extension / 15);
-      ctx.lineWidth = 2;
-      for (let s = 0; s < chainSegs; s++) {
-        const t1 = s / chainSegs;
-        const t2 = (s + 1) / chainSegs;
-        const x1 = pivotX + (hookEndX - pivotX) * t1;
-        const y1 = pivotY + (hookEndY - pivotY) * t1;
-        const x2 = pivotX + (hookEndX - pivotX) * t2;
-        const y2 = pivotY + (hookEndY - pivotY) * t2;
-        // Slight sag in each segment
-        const sagAmount = Math.sin(t1 * Math.PI) * (2 + pend.extension * 0.005);
-        const sway = Math.sin(timeRef.current * 0.04 + s * 0.7) * 0.6;
-        const perpX = -(y2 - y1); // perpendicular direction
-        const perpLen = Math.sqrt(perpX * perpX + (x2 - x1) * (x2 - x1)) || 1;
-        const offX = (perpX / perpLen) * (sagAmount + sway) * 0.15;
+      // Pivot — small clean circle
+      ctx.fillStyle = GOLD;
+      ctx.beginPath(); ctx.arc(pivotX, pivotY, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = isLight ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)';
+      ctx.beginPath(); ctx.arc(pivotX - 1, pivotY - 1, 2.5, 0, Math.PI * 2); ctx.fill();
 
-        // Alternate chain link colors for depth
-        ctx.strokeStyle = s % 2 === 0 ? '#9a8aa0' : '#6a5a70';
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo((x1 + x2) / 2 + offX, (y1 + y2) / 2 + sagAmount + sway, x2, y2);
-        ctx.stroke();
+      /* ── STRING (smooth taut rope) ── */
+      const ropeGrad = ctx.createLinearGradient(pivotX, pivotY, hookEndX, hookEndY);
+      ropeGrad.addColorStop(0, isLight ? '#a09080' : '#8a7a90');
+      ropeGrad.addColorStop(1, isLight ? '#907868' : '#6a5a70');
+      ctx.strokeStyle = ropeGrad;
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pivotX, pivotY);
+      // Slight natural curve
+      const sagMid = 3 + pend.extension * 0.008;
+      const midRopeX = (pivotX + hookEndX) / 2 + sagMid * Math.cos(activeAngle);
+      const midRopeY = (pivotY + hookEndY) / 2 + sagMid;
+      ctx.quadraticCurveTo(midRopeX, midRopeY, hookEndX, hookEndY);
+      ctx.stroke();
 
-        // Chain link circle at joints
-        if (s % 3 === 0) {
-          ctx.fillStyle = '#b0a0b8';
-          ctx.beginPath(); ctx.arc(x1, y1, 2, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-
-      /* ── CLAW/HOOK ── */
+      /* ── HOOK END — clean curved hook ── */
       const hx = hookEndX;
       const hy = hookEndY;
       const open = pend.clawOpen;
-      const armLen = 18;
 
-      // Hook motor housing
+      // Hook body — rounded capsule
       ctx.save();
       ctx.translate(hx, hy);
-      // Rotate housing to match rope angle
       const ropeAngle = Math.atan2(hookEndX - pivotX, hookEndY - pivotY);
-      ctx.rotate(ropeAngle * 0.1); // subtle tilt
+      ctx.rotate(ropeAngle * 0.08);
 
-      // Housing body
-      const housingGrad = ctx.createLinearGradient(-10, -6, 10, 10);
-      housingGrad.addColorStop(0, '#8a7a90');
-      housingGrad.addColorStop(0.5, '#b0a0b8');
-      housingGrad.addColorStop(1, '#5a4a60');
-      ctx.fillStyle = housingGrad;
-      ctx.beginPath(); ctx.roundRect(-10, -5, 20, 13, 4); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
-      // Housing detail lines
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      ctx.beginPath(); ctx.moveTo(-8, -1); ctx.lineTo(8, -1); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-8, 3); ctx.lineTo(8, 3); ctx.stroke();
-      // Bolts
-      ctx.fillStyle = '#ccc';
-      ctx.beginPath(); ctx.arc(-6, 1, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(6, 1, 1.5, 0, Math.PI * 2); ctx.fill();
+      // Core body
+      const bodyGrad = ctx.createLinearGradient(-8, -4, 8, 10);
+      bodyGrad.addColorStop(0, GOLD);
+      bodyGrad.addColorStop(1, isLight ? '#8a7040' : '#6a5030');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath(); ctx.roundRect(-8, -3, 16, 10, 5); ctx.fill();
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.roundRect(-6, -2, 12, 4, 3); ctx.fill();
 
       ctx.restore();
 
-      // 3 prong claw arms
-      const drawClaw = (baseOffsetX: number, spreadDir: number) => {
-        const baseX = hx + baseOffsetX;
-        const baseY = hy + 8;
-        const spread = open * 14 * spreadDir;
-        const elbowX = baseX + spread * 0.3;
-        const elbowY = baseY + armLen * 0.45;
+      // Hook prongs — two curved arms
+      const armLen = 16;
+      const drawHookArm = (side: number) => {
+        const baseX = hx + side * 4;
+        const baseY = hy + 7;
+        const spread = open * 10 * side;
         const tipX = baseX + spread;
         const tipY = baseY + armLen;
-        // Arm shadow
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 4;
+        const ctrlX = baseX + spread * 0.6;
+        const ctrlY = baseY + armLen * 0.55;
+
+        // Shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 3.5;
         ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(baseX + 1, baseY + 1);
-        ctx.lineTo(elbowX + 1, elbowY + 1);
-        ctx.lineTo(tipX + 1, tipY + 1);
+        ctx.moveTo(baseX + 0.5, baseY + 0.5);
+        ctx.quadraticCurveTo(ctrlX + 0.5, ctrlY + 0.5, tipX + 0.5, tipY + 0.5);
         ctx.stroke();
-        // Arm body
+
+        // Arm
         const armGrad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
-        armGrad.addColorStop(0, '#9a8aa0');
-        armGrad.addColorStop(0.5, '#c0b0c8');
-        armGrad.addColorStop(1, '#7a6a80');
+        armGrad.addColorStop(0, GOLD);
+        armGrad.addColorStop(1, isLight ? '#9a8050' : '#7a6a50');
         ctx.strokeStyle = armGrad;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(baseX, baseY);
-        ctx.lineTo(elbowX, elbowY);
-        ctx.lineTo(tipX, tipY);
-        ctx.stroke();
-        // Tip hook curl
-        const curlX = tipX - spreadDir * 5;
-        const curlY = tipY + 2;
-        ctx.strokeStyle = '#8a7a90';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(tipX, tipY);
-        ctx.quadraticCurveTo(tipX - spreadDir * 2, tipY + 5, curlX, curlY);
+        ctx.moveTo(baseX, baseY);
+        ctx.quadraticCurveTo(ctrlX, ctrlY, tipX, tipY);
         ctx.stroke();
-        // Joint circles
-        ctx.fillStyle = '#b0a0b8';
-        ctx.beginPath(); ctx.arc(elbowX, elbowY, 2, 0, Math.PI * 2); ctx.fill();
+
+        // Tip curl
+        const curlX = tipX - side * 4;
+        const curlY = tipY + 1;
+        ctx.strokeStyle = isLight ? '#8a7040' : '#6a5a50';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.quadraticCurveTo(tipX - side * 1.5, tipY + 3.5, curlX, curlY);
+        ctx.stroke();
+
+        // Small tip dot
+        ctx.fillStyle = GOLD;
+        ctx.beginPath(); ctx.arc(curlX, curlY, 1.5, 0, Math.PI * 2); ctx.fill();
       };
 
-      drawClaw(-5, -1); // left arm
-      drawClaw(0, 0);   // center arm (goes straight down)
-      drawClaw(5, 1);    // right arm
+      drawHookArm(-1); // left
+      drawHookArm(1);   // right
 
       // Caught gift — rendered as colored box held by closed claw
       const caught = caughtRef.current;

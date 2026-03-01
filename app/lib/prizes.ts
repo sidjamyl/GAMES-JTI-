@@ -98,7 +98,7 @@ function debugLog(message: string, type: 'info' | 'success' | 'error' | 'warn' =
   line.innerHTML = `<span style="color:#666">[${time}]</span> ${icons[type]} <span style="color:${colors[type]}">${message}</span>`;
   panel.appendChild(line);
   panel.scrollTop = panel.scrollHeight;
-  console.log(`[WL-DEBUG] ${message}`);
+  // console.log(`[WL-DEBUG] ${message}`);
 }
 
 /* ── Mock data for testing outside WebDev ── */
@@ -114,23 +114,21 @@ const MOCK_PRIZES: Prize[] = [
  * Fetch prizes via WL.Execute("STOCK") if in WebDev context,
  * otherwise return mock data for testing.
  */
-export async function fetchPrizes(): Promise<Prize[]> {
+export async function fetchPrizes(stockCommand: string = 'STOCK'): Promise<Prize[]> {
   debugLog('fetchPrizes() démarré', 'info');
 
-  // Try WebDev WL.Execute("STOCK") first
+  // Try WebDev WL.Execute(stockCommand) first
   if (typeof window !== 'undefined' && window.WL?.Execute) {
-    debugLog('WL détecté ✓ → appel WL.Execute("STOCK")...', 'info');
+    debugLog(`WL détecté ✓ → appel WL.Execute("${stockCommand}")...`, 'info');
     try {
-      const data = await fetchPrizesFromWebDev() as Record<string, unknown>;
+      const data = await fetchPrizesFromWebDev(stockCommand) as Record<string, unknown>;
       debugLog('Réponse reçue de WebDev !', 'success');
-      console.log('[PRIZES] Got stock from WebDev:', data);
       const list: Prize[] = Array.isArray(data) ? data : (data.prizes as Prize[]) ?? data;
       if (Array.isArray(list)) {
         debugLog(`STOCK OK → ${list.length} produit(s) : ${list.map(p => `${p.name}(${p.quantity})`).join(', ')}`, 'success');
         return list;
       }
     } catch (e) {
-      console.warn('[PRIZES] WebDev STOCK failed, falling back to mock:', e);
       debugLog(`STOCK échoué : ${e instanceof Error ? e.message : e}`, 'error');
     }
   } else if (typeof window !== 'undefined') {
@@ -146,7 +144,7 @@ export async function fetchPrizes(): Promise<Prize[]> {
  * Call WL.Execute("STOCK") and wait for WebDev to call back
  * via window.receiveStock(jsonString)
  */
-function fetchPrizesFromWebDev(): Promise<unknown> {
+function fetchPrizesFromWebDev(stockCommand: string = 'STOCK'): Promise<unknown> {
   return new Promise((resolve, reject) => {
     debugLog('Attente réponse WebDev (timeout 5s)...', 'info');
 
@@ -197,19 +195,14 @@ function fetchPrizesFromWebDev(): Promise<unknown> {
       }
     };
 
-    debugLog('→ WL.Execute("STOCK") envoyé !', 'info');
-    window.WL!.Execute!('STOCK');
+    debugLog(`→ WL.Execute("${stockCommand}") envoyé !`, 'info');
+    window.WL!.Execute!(stockCommand);
   });
 }
 
 export async function claimPrize(prizeId: number): Promise<void> {
   // Claim is handled via WL.Execute("GAIN") in VictoryScreen
   // Outside WebDev context, this is a no-op (mock mode)
-  if (typeof window !== 'undefined' && window.WL?.Execute) {
-    console.log('[PRIZES] Claim handled by WL.Execute("GAIN") in VictoryScreen');
-  } else {
-    console.log('[PRIZES] Mock mode — claim skipped for prize', prizeId);
-  }
 }
 
 /** Weighted random pick based on available quantity */

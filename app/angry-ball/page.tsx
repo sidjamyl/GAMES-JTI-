@@ -72,9 +72,9 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const distributed = shuffle(distributeProportionally(allPrizes, displaySlots));
   const total = Math.max(1, distributed.length);
 
-  // Smaller cup size for more challenge
-  const cupW = 0.045;
-  const cupH = 0.055;
+  // Cup size — slightly wider for better visibility
+  const cupW = 0.058;
+  const cupH = 0.060;
 
   // Random placement zone (right 2/3 of screen)
   const zoneMinX = 0.30;

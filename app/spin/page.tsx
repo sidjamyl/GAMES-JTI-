@@ -51,7 +51,7 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
 
   /* ─── Load prizes ─── */
   useEffect(() => {
-    fetchPrizes().then(data => {
+    fetchPrizes('STOCK_STW').then(data => {
       const available = data.filter(p => p.quantity > 0);
       if (available.length === 0) return;
       setPrizes(available);

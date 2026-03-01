@@ -172,8 +172,8 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
             <div
               className="flex items-center justify-center w-10 h-10 rounded-xl"
               style={{
-                background: GOLD + (isLight ? '12' : '15'),
-                color: GOLD,
+                background: (isLight ? AMBER : GOLD) + (isLight ? '12' : '15'),
+                color: isLight ? AMBER : GOLD,
               }}
             >
               {GAME_ICONS[game.key] || <div className="w-4 h-4 rounded-full" style={{ background: GOLD }} />}

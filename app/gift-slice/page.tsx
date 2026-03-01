@@ -300,6 +300,9 @@ export default function GiftSlice({ theme }: { theme?: GameTheme }) {
                 addParticles(item.x, item.y, `hsl(${hue}, 50%, 50%)`, 10);
                 shakeRef.current.decay = 1;
                 try { getSoundEngine().miss(); } catch { /* */ }
+                // Notify WebDev of loss
+                const win = window as unknown as { WL?: { Execute?: (...args: string[]) => void } };
+                if (win?.WL?.Execute) win.WL.Execute('GAIN', '-1');
                 setTimeout(() => {
                   doneRef.current = true;
                   setMissed(true);

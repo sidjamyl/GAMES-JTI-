@@ -21,20 +21,16 @@ function buildUrl(req: NextRequest): string {
 
 export async function GET(req: NextRequest) {
   const url = buildUrl(req);
-  console.log('[PRIZES GET] fetching:', url);
   try {
     const res = await fetch(url, { cache: 'no-store' });
-    console.log('[PRIZES GET] upstream status:', res.status);
     if (!res.ok) {
       const body = await res.text();
-      console.log('[PRIZES GET] upstream error body:', body);
       return NextResponse.json(
         { error: `Upstream returned ${res.status}`, body },
         { status: res.status },
       );
     }
     const data = await res.json();
-    console.log('[PRIZES GET] raw response:', JSON.stringify(data, null, 2));
 
     /* Filter out product with id 267 (test) */
     const list = Array.isArray(data)
@@ -44,7 +40,6 @@ export async function GET(req: NextRequest) {
       data.prizes = data.prizes.filter((p: { id: number }) => p.id !== 267);
     }
 
-    console.log('[PRIZES GET] after filtering id 267:', JSON.stringify(Array.isArray(data) ? list : data, null, 2));
     return NextResponse.json(Array.isArray(data) ? list : data);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Unknown error';
