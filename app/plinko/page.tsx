@@ -359,16 +359,6 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(prize.emoji, sx + slotW / 2, g.slotY + 16);
-
-          // Prize name (truncated, only if slot wide enough)
-          if (slotW > 28) {
-            ctx.fillStyle = CREAM + '60';
-            const nameSize = Math.max(5, Math.min(7, slotW * 0.16));
-            ctx.font = `bold ${nameSize}px system-ui`;
-            const maxChars = Math.max(3, Math.floor(slotW / 6));
-            const name = prize.name.length > maxChars ? prize.name.substring(0, maxChars - 1) + '…' : prize.name;
-            ctx.fillText(name, sx + slotW / 2, g.slotY + 34);
-          }
         } else {
           // Empty slot — subtle X
           ctx.fillStyle = `rgba(${creamRgb},0.12)`;

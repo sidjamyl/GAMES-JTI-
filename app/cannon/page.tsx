@@ -510,8 +510,10 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
 
         if (!hitRef.current) {
           for (const plat of platformsRef.current) {
-            const onX = ball.x >= plat.x - plat.width / 2 - BALL_R * 0.5 && ball.x <= plat.x + plat.width / 2 + BALL_R * 0.5;
-            const onY = ball.y + BALL_R >= plat.y && ball.y + BALL_R <= plat.y + 12 && ball.vy > 0;
+            // Ball must land on the platform surface from above (no side touches)
+            const onX = ball.x >= plat.x - plat.width / 2 && ball.x <= plat.x + plat.width / 2;
+            const ballBottom = ball.y + BALL_R;
+            const onY = ballBottom >= plat.y - 2 && ballBottom <= plat.y + 14 && ball.vy > 0;
             if (onX && onY) {
               hitRef.current = true;
               plat.hit = true;

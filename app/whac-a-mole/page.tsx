@@ -257,12 +257,7 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
                       }}>
                       {hole.caught ? CATCH_EMOJI : (hole.prize?.emoji || '🎁')}
                     </span>
-                    {!hole.caught && hole.prize && (
-                      <span className="text-[9px] font-bold tracking-tight max-w-[80%] truncate"
-                        style={{ color: CREAM + '80' }}>
-                        {hole.prize.name}
-                      </span>
-                    )}
+
                   </div>
                 )}
 

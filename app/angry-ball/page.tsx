@@ -427,15 +427,6 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
           ctx.textBaseline = 'middle';
           ctx.globalAlpha = 0.95;
           ctx.fillText(cup.prize.emoji, cp.x, cp.y + cupH * 0.35);
-
-          // Prize name — small text below emoji
-          const nameSize = Math.max(6, Math.min(9, cupW * 0.22));
-          ctx.font = `bold ${nameSize * dpr}px sans-serif`;
-          ctx.fillStyle = CREAM + 'cc';
-          const label = cup.prize.name.length > 10
-            ? cup.prize.name.slice(0, 9) + '…'
-            : cup.prize.name;
-          ctx.fillText(label, cp.x, cp.y + cupH * 0.72);
           ctx.globalAlpha = 1;
         }
       }
