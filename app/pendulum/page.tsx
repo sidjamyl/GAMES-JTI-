@@ -6,6 +6,7 @@ import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/pri
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
+import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
 /* ═══════════════════════════════════════════════
    PENDULUM — Polished timing grab game
@@ -92,14 +93,15 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
 
   const initConveyor = useCallback((w: number, prizes: Prize[]) => {
     const items: ConveyorItem[] = [];
-    const available = prizes.filter(p => p.quantity > 0);
-    const count = Math.max(1, available.length);
+    const displaySlots = getDisplaySlots('pendulum');
+    const distributed = shuffle(distributeProportionally(prizes, displaySlots));
+    const count = distributed.length || 1;
     const giftSize = Math.max(22, Math.min(36, w * 0.085));
     const spacing = w / Math.max(count, 1);
     for (let i = 0; i < count; i++) {
       items.push({
         x: 40 + i * spacing,
-        prize: available[i % available.length],
+        prize: distributed[i],
         speed: 1.8 + Math.random() * 1.0,
         size: giftSize,
         hue: GIFT_HUES[Math.floor(Math.random() * GIFT_HUES.length)],

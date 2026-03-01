@@ -6,6 +6,7 @@ import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/pri
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
+import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
 /* ═══════════════════════════════════════════
    ANGRY BALL — Themeable
@@ -64,9 +65,10 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const platforms: PlatformDef[] = [];
   const obstacles: Obstacle[] = [];
 
-  // Dense grid layout — adapt to number of available prizes
-  const available = allPrizes.filter(p => p.quantity > 0);
-  const total = Math.max(1, available.length);
+  // Dense grid layout — always DISPLAY_SLOTS cups with proportional prizes
+  const displaySlots = getDisplaySlots('angry-ball');
+  const distributed = shuffle(distributeProportionally(allPrizes, displaySlots));
+  const total = Math.max(1, distributed.length);
   const cols = Math.min(total, Math.max(2, Math.ceil(Math.sqrt(total))));
   const rows = Math.ceil(total / cols);
   const cupW = Math.min(0.085, 0.7 / cols);
@@ -78,11 +80,8 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const spacingX = cols > 1 ? (endX - startX) / (cols - 1) : 0;
   const spacingY = rows > 1 ? (endY - startY) / (rows - 1) : 0;
 
-  // Assign each available prize to a cup
-  const usedPrizes: Prize[] = [];
-  for (let i = 0; i < total; i++) {
-    usedPrizes.push(available[i % available.length]);
-  }
+  // Use proportionally distributed prizes
+  const usedPrizes = distributed;
 
   let idx = 0;
   for (let row = 0; row < rows; row++) {

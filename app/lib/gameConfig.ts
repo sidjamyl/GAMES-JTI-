@@ -9,10 +9,10 @@ export const DEFAULT_DISPLAY_SLOTS = 5;
 
 /** Per-game overrides (optional — falls back to DEFAULT_DISPLAY_SLOTS) */
 export const GAME_DISPLAY_SLOTS: Record<string, number> = {
-  plinko: 5,
-  // cannon: 10,
-  // pendulum: 10,
-  // 'angry-ball': 10,
+  plinko: 10,
+  cannon: 6,
+  pendulum: 10,
+  'angry-ball': 6,
   // 'gyro-maze': 10,
   // 'gift-slice': 10,
   // 'stack-tower': 10,
@@ -58,12 +58,24 @@ export function distributeProportionally(
   }
 
   // — Edge case: more unique products than slots
-  //   Keep the ones with the highest quantities
+  //   Pick randomly, weighted by quantity (proportional lottery)
   let candidates = available;
   if (candidates.length > totalSlots) {
-    candidates = [...available]
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, totalSlots);
+    const totalQtyAll = available.reduce((s, p) => s + p.quantity, 0);
+    const pool = [...available];
+    const picked: Prize[] = [];
+    for (let n = 0; n < totalSlots && pool.length > 0; n++) {
+      const poolTotal = pool.reduce((s, p) => s + p.quantity, 0);
+      let rand = Math.random() * poolTotal;
+      let chosen = pool.length - 1;
+      for (let k = 0; k < pool.length; k++) {
+        rand -= pool[k].quantity;
+        if (rand <= 0) { chosen = k; break; }
+      }
+      picked.push(pool[chosen]);
+      pool.splice(chosen, 1); // remove so no duplicate type
+    }
+    candidates = picked;
   }
 
   const totalQty = candidates.reduce((sum, p) => sum + p.quantity, 0);

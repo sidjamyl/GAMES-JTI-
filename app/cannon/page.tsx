@@ -6,6 +6,7 @@ import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/pri
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
+import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
 /* ═══════════════════════════════════════════════
    CANNON — Polished single-shot trajectory game
@@ -101,15 +102,16 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     sizeRef.current = { w, h };
 
     const platforms: Platform[] = [];
-    const available = prizes.filter(p => p.quantity > 0);
-    const platCount = Math.max(1, available.length);
+    const displaySlots = getDisplaySlots('cannon');
+    const distributed = shuffle(distributeProportionally(prizes, displaySlots));
+    const platCount = Math.max(1, distributed.length);
     for (let i = 0; i < platCount; i++) {
       const t = (i + 1) / (platCount + 1);
       platforms.push({
         x: w * 0.22 + t * w * 0.7,
         y: h * 0.20 + Math.sin(t * Math.PI) * h * 0.35,
         width: 24 + (platCount - i) * 3,
-        prize: available[i % available.length],
+        prize: distributed[i],
         hue: GIFT_HUES[i % GIFT_HUES.length],
       });
     }
