@@ -92,14 +92,14 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
 
   const initConveyor = useCallback((w: number, prizes: Prize[]) => {
     const items: ConveyorItem[] = [];
-    const giftSize = Math.max(26, Math.min(36, w * 0.085));
-    const giftGap = giftSize * 0.5;
-    const count = Math.max(2, Math.floor((w + 100) / (giftSize + giftGap) * 0.25));
+    const available = prizes.filter(p => p.quantity > 0);
+    const count = Math.max(1, available.length);
+    const giftSize = Math.max(22, Math.min(36, w * 0.085));
     const spacing = w / Math.max(count, 1);
     for (let i = 0; i < count; i++) {
       items.push({
         x: 40 + i * spacing,
-        prize: selectPremiumPrize(prizes),
+        prize: available[i % available.length],
         speed: 1.8 + Math.random() * 1.0,
         size: giftSize,
         hue: GIFT_HUES[Math.floor(Math.random() * GIFT_HUES.length)],

@@ -306,11 +306,12 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
     wallsRef.current = [...filtered, ...outer];
 
-    // Create goals at exits
+    // Create goals at exits — cycle through all available prizes
+    const available = prizes.filter(p => p.quantity > 0);
     const goals: GoalDef[] = exits.map((exit, i) => ({
       x: exit.nx,
       y: exit.ny,
-      prize: selectPremiumPrize(prizes),
+      prize: available.length > 0 ? available[i % available.length] : prizes[0],
       color: GOAL_COLORS[i % GOAL_COLORS.length],
     }));
     goalsRef.current = goals;

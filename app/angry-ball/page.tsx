@@ -64,28 +64,30 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
   const platforms: PlatformDef[] = [];
   const obstacles: Obstacle[] = [];
 
-  // Dense grid layout — 3 columns x 3 rows covering the right side
-  // This ensures almost no empty space, forcing precision
-  const cols = 3;
-  const rows = 1;
-  const cupW = 0.085;
-  const cupH = 0.095;
+  // Dense grid layout — adapt to number of available prizes
+  const available = allPrizes.filter(p => p.quantity > 0);
+  const total = Math.max(1, available.length);
+  const cols = Math.min(total, Math.max(2, Math.ceil(Math.sqrt(total))));
+  const rows = Math.ceil(total / cols);
+  const cupW = Math.min(0.085, 0.7 / cols);
+  const cupH = Math.min(0.095, 0.4 / rows);
   const startX = 0.35;
   const endX = 0.88;
-  const startY = 0.45;
-  const endY = 0.45;
+  const startY = total <= 3 ? 0.45 : 0.30;
+  const endY = total <= 3 ? 0.45 : 0.70;
   const spacingX = cols > 1 ? (endX - startX) / (cols - 1) : 0;
   const spacingY = rows > 1 ? (endY - startY) / (rows - 1) : 0;
 
-  // Assign unique prizes to each cup
+  // Assign each available prize to a cup
   const usedPrizes: Prize[] = [];
-  for (let i = 0; i < cols * rows; i++) {
-    usedPrizes.push(selectPremiumPrize(allPrizes));
+  for (let i = 0; i < total; i++) {
+    usedPrizes.push(available[i % available.length]);
   }
 
   let idx = 0;
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
+      if (idx >= total) break;
       // Slight random offset for organic feel
       const jitterX = (Math.random() - 0.5) * 0.025;
       const jitterY = (Math.random() - 0.5) * 0.02;

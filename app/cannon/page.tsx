@@ -101,15 +101,15 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
     sizeRef.current = { w, h };
 
     const platforms: Platform[] = [];
-    const premium = [...prizes].filter(p => p.quantity > 0 && p.name !== 'Briquet').sort((a, b) => a.quantity - b.quantity);
-    const platCount = Math.min(5, Math.max(3, premium.length));
+    const available = prizes.filter(p => p.quantity > 0);
+    const platCount = Math.max(1, available.length);
     for (let i = 0; i < platCount; i++) {
       const t = (i + 1) / (platCount + 1);
       platforms.push({
         x: w * 0.22 + t * w * 0.7,
         y: h * 0.20 + Math.sin(t * Math.PI) * h * 0.35,
         width: 24 + (platCount - i) * 3,
-        prize: premium[i % premium.length] || selectPremiumPrize(prizes),
+        prize: available[i % available.length],
         hue: GIFT_HUES[i % GIFT_HUES.length],
       });
     }

@@ -101,9 +101,18 @@ function debugLog(message: string, type: 'info' | 'success' | 'error' | 'warn' =
   console.log(`[WL-DEBUG] ${message}`);
 }
 
+/* ── Mock data for testing outside WebDev ── */
+const MOCK_PRIZES: Prize[] = [
+  { id: 1, name: 'Briquet', quantity: 50, emoji: '🔥' },
+  { id: 2, name: 'AirPods', quantity: 5, emoji: '🎧' },
+  { id: 3, name: 'Power Bank', quantity: 10, emoji: '🔋' },
+  { id: 4, name: 'Casquette', quantity: 20, emoji: '🧢' },
+  { id: 5, name: 'Enceinte BT', quantity: 3, emoji: '🔊' },
+];
+
 /**
  * Fetch prizes via WL.Execute("STOCK") if in WebDev context,
- * otherwise fallback to the API proxy.
+ * otherwise return mock data for testing.
  */
 export async function fetchPrizes(): Promise<Prize[]> {
   debugLog('fetchPrizes() démarré', 'info');
@@ -121,30 +130,16 @@ export async function fetchPrizes(): Promise<Prize[]> {
         return list;
       }
     } catch (e) {
-      console.warn('[PRIZES] WebDev STOCK failed, falling back to API:', e);
+      console.warn('[PRIZES] WebDev STOCK failed, falling back to mock:', e);
       debugLog(`STOCK échoué : ${e instanceof Error ? e.message : e}`, 'error');
     }
   } else if (typeof window !== 'undefined') {
-    debugLog('WL non détecté (hors WebDev) → fallback API', 'warn');
+    debugLog('WL non détecté (hors WebDev) → mock data', 'warn');
   }
 
-  // Fallback: fetch via API proxy
-  debugLog('Appel API proxy /api/prizes...', 'info');
-  const s = getSessionUserId();
-  const qs = new URLSearchParams();
-  if (s) qs.set('s', s);
-
-  const res = await fetch(`${PROXY}?${qs}`);
-  if (!res.ok) {
-    debugLog(`API erreur HTTP ${res.status}`, 'error');
-    throw new Error('Failed to fetch prizes');
-  }
-  const data = await res.json();
-
-  const list: Prize[] = Array.isArray(data) ? data : data.prizes ?? data;
-  if (!Array.isArray(list)) throw new Error('Unexpected prizes format');
-  debugLog(`API OK → ${list.length} produit(s) : ${list.map((p: Prize) => `${p.name}(${p.quantity})`).join(', ')}`, 'success');
-  return list;
+  // Fallback: mock data for testing outside WebDev
+  debugLog(`Mock data → ${MOCK_PRIZES.length} produit(s) : ${MOCK_PRIZES.map(p => `${p.name}(${p.quantity})`).join(', ')}`, 'success');
+  return MOCK_PRIZES;
 }
 
 /**
@@ -208,24 +203,13 @@ function fetchPrizesFromWebDev(): Promise<unknown> {
 }
 
 export async function claimPrize(prizeId: number): Promise<void> {
-  // Claim is now handled via WL.Execute("GAIN") in VictoryScreen
-  // Keep API fallback for non-WebDev contexts
+  // Claim is handled via WL.Execute("GAIN") in VictoryScreen
+  // Outside WebDev context, this is a no-op (mock mode)
   if (typeof window !== 'undefined' && window.WL?.Execute) {
     console.log('[PRIZES] Claim handled by WL.Execute("GAIN") in VictoryScreen');
-    return;
+  } else {
+    console.log('[PRIZES] Mock mode — claim skipped for prize', prizeId);
   }
-
-  const s = getSessionUserId();
-  const g = getSessionSecondId();
-  const qs = new URLSearchParams();
-  if (s) qs.set('s', s);
-
-  const payload: ClaimPayload = { id: prizeId, quantity: 1, ...(g && { gid: g }) };
-  await fetch(`${PROXY}?${qs}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
 }
 
 /** Weighted random pick based on available quantity */

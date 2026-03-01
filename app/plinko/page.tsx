@@ -170,17 +170,14 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     };
   }, []);
 
-  // Place PRIZE_SLOTS premium prizes in random positions; the rest are null (miss)
+  // Place ALL prizes in the slots — cycling through the full list
   const assignSlotPrizes = useCallback(() => {
     const { slotCount } = gridRef.current;
-    const prizeCount = Math.max(MIN_PRIZE_SLOTS, Math.ceil(slotCount * PRIZE_SLOT_RATIO));
-    const slots: (Prize | null)[] = new Array(slotCount).fill(null);
-    const positions = new Set<number>();
-    while (positions.size < Math.min(prizeCount, slotCount)) {
-      positions.add(Math.floor(Math.random() * slotCount));
-    }
-    for (const pos of positions) {
-      slots[pos] = selectPremiumPrize(prizes);
+    const available = prizes.filter(p => p.quantity > 0);
+    if (available.length === 0) return;
+    const slots: (Prize | null)[] = [];
+    for (let i = 0; i < slotCount; i++) {
+      slots.push(available[i % available.length]);
     }
     setSlotPrizes(slots);
     slotPrizesRef.current = slots;
