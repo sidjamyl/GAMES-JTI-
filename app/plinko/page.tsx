@@ -6,6 +6,7 @@ import { fetchPrizes, selectPremiumPrize, getConsolationPrize } from '../lib/pri
 import { getSoundEngine } from '../lib/sounds';
 import VictoryScreen from '../components/VictoryScreen';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
+import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
 
 /* ═══════════════════════════════════════════════
    PLINKO — Themeable
@@ -165,32 +166,22 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
     };
   }, []);
 
-  // Distribute prizes randomly across slots — exactly N prizes placed, rest empty
+  // Distribute prizes proportionally across slots — exactly DISPLAY_SLOTS prizes, rest empty
   const assignSlotPrizes = useCallback(() => {
     const { slotCount } = gridRef.current;
+    const displaySlots = getDisplaySlots('plinko');
     const available = prizes.filter(p => p.quantity > 0);
     if (available.length === 0) return;
 
-    // Expand each prize by its full quantity
-    const expanded: Prize[] = [];
-    available.forEach(prize => {
-      for (let i = 0; i < prize.quantity; i++) {
-        expanded.push(prize);
-      }
-    });
-
-    // Build array of slot indices and shuffle
-    const indices = Array.from({ length: slotCount }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
+    // Get proportionally distributed prizes (e.g. 10 items)
+    const distributed = distributeProportionally(available, displaySlots);
+    // Shuffle distributed prizes into random slot positions
+    const shuffledIndices = shuffle(Array.from({ length: slotCount }, (_, i) => i));
 
     const slots: (Prize | null)[] = new Array(slotCount).fill(null);
-    // Place prizes in random slots (up to slotCount)
-    const toPlace = Math.min(expanded.length, slotCount);
+    const toPlace = Math.min(distributed.length, slotCount);
     for (let i = 0; i < toPlace; i++) {
-      slots[indices[i]] = expanded[i];
+      slots[shuffledIndices[i]] = distributed[i];
     }
 
     setSlotPrizes(slots);

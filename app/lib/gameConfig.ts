@@ -1,0 +1,133 @@
+import { Prize } from './types';
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL GAME CONFIG — Change these to tune all games at once
+   ═══════════════════════════════════════════════════════════ */
+
+/** Number of prize slots to display per game (default for all games) */
+export const DEFAULT_DISPLAY_SLOTS = 5;
+
+/** Per-game overrides (optional — falls back to DEFAULT_DISPLAY_SLOTS) */
+export const GAME_DISPLAY_SLOTS: Record<string, number> = {
+  plinko: 5,
+  // cannon: 10,
+  // pendulum: 10,
+  // 'angry-ball': 10,
+  // 'gyro-maze': 10,
+  // 'gift-slice': 10,
+  // 'stack-tower': 10,
+  // 'whac-a-mole': 10,
+};
+
+/** Get the display slot count for a given game */
+export function getDisplaySlots(game: string): number {
+  return GAME_DISPLAY_SLOTS[game] ?? DEFAULT_DISPLAY_SLOTS;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROPORTIONAL PRIZE DISTRIBUTION
+   
+   Given a list of prizes and a target total, returns an array
+   of N prizes distributed proportionally to their quantities.
+   
+   Uses the "largest remainder" method to guarantee:
+   - The returned array length === totalSlots (exactly)
+   - Each prize appears proportionally to its quantity
+   - Every prize with qty > 0 gets at least 1 slot
+     (if there are more unique prizes than slots, the ones
+      with the smallest quantities are dropped)
+   
+   Examples (totalSlots = 10):
+     Casquette:20, Briquet:20  →  5 + 5 = 10
+     Casquette:10, Briquet:100 →  1 + 9 = 10
+     A:1, B:1, C:1, D:1, E:1, F:1, G:1, H:1, I:1, J:1, K:1
+       → 11 products but 10 slots → smallest qty dropped
+   ═══════════════════════════════════════════════════════════ */
+
+export function distributeProportionally(
+  prizes: Prize[],
+  totalSlots: number,
+): Prize[] {
+  const available = prizes.filter(p => p.quantity > 0);
+  if (available.length === 0) return [];
+  if (totalSlots <= 0) return [];
+
+  // — Edge case: only 1 product
+  if (available.length === 1) {
+    return new Array(totalSlots).fill(available[0]);
+  }
+
+  // — Edge case: more unique products than slots
+  //   Keep the ones with the highest quantities
+  let candidates = available;
+  if (candidates.length > totalSlots) {
+    candidates = [...available]
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, totalSlots);
+  }
+
+  const totalQty = candidates.reduce((sum, p) => sum + p.quantity, 0);
+
+  // — Step 1: Calculate exact proportions & floor allocations
+  const allocations = candidates.map(p => {
+    const exact = (p.quantity / totalQty) * totalSlots;
+    return { prize: p, exact, floored: Math.floor(exact) };
+  });
+
+  // — Step 2: Guarantee each product gets at least 1
+  allocations.forEach(a => {
+    if (a.floored === 0) a.floored = 1;
+  });
+
+  // — Step 3: If we over-allocated due to minimum-1 rule, trim
+  let currentTotal = allocations.reduce((s, a) => s + a.floored, 0);
+  if (currentTotal > totalSlots) {
+    // Remove excess from the largest allocations first
+    const sorted = [...allocations].sort((a, b) => b.floored - a.floored);
+    let excess = currentTotal - totalSlots;
+    for (const a of sorted) {
+      if (excess <= 0) break;
+      const canRemove = Math.min(excess, a.floored - 1); // keep at least 1
+      a.floored -= canRemove;
+      excess -= canRemove;
+    }
+  }
+
+  // — Step 4: Distribute remaining slots using largest remainder
+  currentTotal = allocations.reduce((s, a) => s + a.floored, 0);
+  let remaining = totalSlots - currentTotal;
+  if (remaining > 0) {
+    const byRemainder = [...allocations].sort(
+      (a, b) => (b.exact - b.floored) - (a.exact - a.floored),
+    );
+    for (const a of byRemainder) {
+      if (remaining <= 0) break;
+      a.floored += 1;
+      remaining -= 1;
+    }
+  }
+
+  // — Step 5: Build the expanded array
+  const result: Prize[] = [];
+  allocations.forEach(a => {
+    for (let i = 0; i < a.floored; i++) {
+      result.push(a.prize);
+    }
+  });
+
+  return result;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SHUFFLE UTILITY
+   Fisher-Yates shuffle — reusable across all games
+   ═══════════════════════════════════════════════════════════ */
+
+export function shuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
