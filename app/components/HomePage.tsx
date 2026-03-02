@@ -2,6 +2,8 @@
 import React from "react";
 import Link from "next/link";
 import { GameTheme, DEFAULT_THEME } from '../lib/themes';
+import { getGamesForLetters } from '../lib/gameConfig';
+import GameBackground from './GameBackground';
 
 /* ═══════════════════════════════════════════════
    Home Page — Clean, professional game selection grid
@@ -21,13 +23,6 @@ const GAME_ICONS: Record<string, React.ReactElement> = {
       <rect x="6" y="26" width="4" height="3" rx="1" fill="currentColor" opacity="0.5"/>
       <rect x="14" y="26" width="4" height="3" rx="1" fill="currentColor" opacity="0.5"/>
       <rect x="22" y="26" width="4" height="3" rx="1" fill="currentColor" opacity="0.5"/>
-    </svg>
-  ),
-  'gyro-maze': (
-    <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7">
-      <rect x="4" y="4" width="24" height="24" rx="3" stroke="currentColor" strokeWidth="2" opacity="0.4"/>
-      <path d="M4 12h12v8H8v-4h8" stroke="currentColor" strokeWidth="2" opacity="0.6"/>
-      <circle cx="22" cy="22" r="2.5" fill="currentColor" opacity="0.9"/>
     </svg>
   ),
   'angry-ball': (
@@ -61,12 +56,39 @@ const GAME_ICONS: Record<string, React.ReactElement> = {
       <line x1="28" y1="16" x2="23" y2="16" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
     </svg>
   ),
+  'gift-slice': (
+    <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7">
+      <rect x="8" y="12" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+      <rect x="6" y="10" width="20" height="4" rx="1.5" fill="currentColor" opacity="0.4"/>
+      <line x1="16" y1="10" x2="16" y2="26" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+      <path d="M16 10 C16 10 12 4 9 6" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+      <path d="M16 10 C16 10 20 4 23 6" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+    </svg>
+  ),
+  'stack-tower': (
+    <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7">
+      <rect x="10" y="24" width="12" height="4" rx="1" fill="currentColor" opacity="0.3"/>
+      <rect x="9" y="19" width="14" height="4" rx="1" fill="currentColor" opacity="0.45"/>
+      <rect x="11" y="14" width="10" height="4" rx="1" fill="currentColor" opacity="0.6"/>
+      <rect x="10" y="9" width="12" height="4" rx="1" fill="currentColor" opacity="0.75"/>
+      <rect x="12" y="4" width="8" height="4" rx="1" fill="currentColor" opacity="0.9"/>
+    </svg>
+  ),
+  'whac-a-mole': (
+    <svg viewBox="0 0 32 32" fill="none" className="w-7 h-7">
+      <ellipse cx="16" cy="24" rx="10" ry="3" fill="currentColor" opacity="0.2"/>
+      <circle cx="16" cy="16" r="6" fill="currentColor" opacity="0.7"/>
+      <circle cx="14" cy="15" r="1" fill="white" opacity="0.8"/>
+      <circle cx="18" cy="15" r="1" fill="white" opacity="0.8"/>
+      <rect x="4" y="4" width="4" height="12" rx="2" fill="currentColor" opacity="0.4" transform="rotate(-20 6 10)"/>
+    </svg>
+  ),
 };
 
-export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme }) {
+export default function HomePage({ theme = DEFAULT_THEME, letters = '' }: { theme?: GameTheme; letters?: string }) {
   const {
     GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA,
-    BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode,
+    BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode, name: themeName,
   } = theme;
 
   const isLight = mode === 'light';
@@ -88,17 +110,19 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
     ? 'rgba(0,0,0,0.04)'
     : 'rgba(255,255,255,0.06)';
 
-  const GAMES = [
-    { href: `${routePrefix}/plinko`, title: "Plinko", key: 'plinko', desc: "Lâchez la bille" },
-    { href: `${routePrefix}/angry-ball`, title: "Angry Ball", key: 'angry-ball', desc: "Visez le cadeau" },
-    { href: `${routePrefix}/pendulum`, title: "Pendulum", key: 'pendulum', desc: "Timing parfait" },
-    { href: `${routePrefix}/cannon`, title: "Cannon", key: 'cannon', desc: "Tirez & détruisez" },
-    { href: `${routePrefix}/spin`, title: "Spin & Win", key: 'spin', desc: "Tournez la roue" },
-  ];
+  /* Build game list from letters (empty letters = no games) */
+  const gameMetas = getGamesForLetters(letters);
+  const hrefBase = letters ? `${routePrefix}/${letters}` : routePrefix;
+  const GAMES = gameMetas.map(g => ({
+    href: `${hrefBase}/${g.slug}`,
+    title: g.title,
+    key: g.slug,
+    desc: g.desc,
+  }));
 
   return (
     <div
-      className="flex flex-col items-center justify-center px-5 overflow-hidden"
+      className="relative flex flex-col items-center justify-center px-5 overflow-hidden"
       style={{
         width: "100%",
         height: "100dvh",
@@ -107,9 +131,10 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
           : `radial-gradient(ellipse at 50% 20%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)`,
       }}
     >
+      <GameBackground themeName={themeName} />
       {/* Header */}
       <div
-        className="text-center mb-8"
+        className="relative z-[2] text-center mb-8"
         style={{ animation: "fadeInUp 0.4s ease-out both" }}
       >
         {/* Accent line */}
@@ -137,7 +162,7 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
 
       {/* Games Grid */}
       <div
-        className="grid gap-2.5 w-full"
+        className="relative z-[2] grid gap-2.5 w-full"
         style={{
           gridTemplateColumns: 'repeat(2, 1fr)',
           maxWidth: '380px',
@@ -200,7 +225,7 @@ export default function HomePage({ theme = DEFAULT_THEME }: { theme?: GameTheme 
 
       {/* Subtle footer accent */}
       <div
-        className="mt-6"
+        className="relative z-[2] mt-6"
         style={{
           width: '20px',
           height: '2px',

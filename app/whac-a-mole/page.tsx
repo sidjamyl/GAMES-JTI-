@@ -8,6 +8,7 @@ import VictoryScreen from '../components/VictoryScreen';
 import PrizeLegend from '../components/PrizeLegend';
 import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME } from '../lib/themes';
+import GameBackground from '../components/GameBackground';
 
 /* ═══════════════════════════════════════════════
    GIFT CATCHER — Themeable
@@ -34,7 +35,7 @@ interface Hole {
 }
 
 export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY, routePrefix, mode } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, MAHOGANY, routePrefix, mode, name: themeName } = { ...DEFAULT_THEME, ...theme };
   const isLight = mode === 'light';
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [prizes, setPrizes] = useState<Prize[]>([]);
@@ -178,6 +179,7 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
         padding: '0 16px',
       }}
     >
+      <GameBackground themeName={themeName} />
       {/* Back to menu */}
       <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>

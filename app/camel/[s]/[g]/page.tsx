@@ -1,19 +1,16 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect } from 'react';
-import HomePage from '../../../components/HomePage';
+import GameRouter from '../../../components/GameRouter';
 import { CAMEL_THEME } from '../../../lib/themes';
 
-export default function CamelEntryPage() {
+export default function CamelGamePage() {
   const params = useParams();
+  const letters = (params.s as string) || '';
+  const game = (params.g as string) || '';
 
-  useEffect(() => {
-    const s = params.s as string;
-    const g = params.g as string;
-    if (s) sessionStorage.setItem('uid', s);
-    if (g) sessionStorage.setItem('gid', g);
-  }, [params]);
+  /* Pass modified theme with routePrefix including letters for back navigation */
+  const theme = { ...CAMEL_THEME, routePrefix: `${CAMEL_THEME.routePrefix}/${letters}` };
 
-  return <HomePage theme={CAMEL_THEME} />;
+  return <GameRouter game={game} theme={theme} />;
 }

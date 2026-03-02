@@ -4,6 +4,51 @@ import { Prize } from './types';
    GLOBAL GAME CONFIG — Change these to tune all games at once
    ═══════════════════════════════════════════════════════════ */
 
+/* ── Letter-to-game mapping ────────────────────────────────
+   Each letter maps to a game slug. The order of letters in the
+   URL controls which games are shown on the home page.
+   Example URL: /camel/abcdef → shows games a,b,c,d,e,f
+   ──────────────────────────────────────────────────────── */
+
+export interface GameMeta {
+  slug: string;
+  title: string;
+  desc: string;
+  letter: string;
+}
+
+export const ALL_GAMES: GameMeta[] = [
+  { slug: 'spin',         title: 'Spin & Win',   desc: 'Tournez la roue',      letter: 'a' },
+  { slug: 'plinko',       title: 'Plinko',        desc: 'Lâchez la bille',      letter: 'b' },
+  { slug: 'cannon',       title: 'Cannon',        desc: 'Tirez & détruisez',    letter: 'c' },
+  { slug: 'angry-ball',   title: 'Angry Ball',    desc: 'Visez le cadeau',      letter: 'd' },
+  { slug: 'pendulum',     title: 'Pendulum',      desc: 'Timing parfait',       letter: 'e' },
+  { slug: 'gift-slice',   title: 'Gift Slice',    desc: 'Tranchez les cadeaux', letter: '' },
+  { slug: 'stack-tower',  title: 'Stack Tower',   desc: 'Empilez les blocs',    letter: '' },
+  { slug: 'whac-a-mole',  title: 'Whac-a-Mole',  desc: 'Tapez les taupes',     letter: '' },
+];
+
+/** Get ordered list of games for a letters string (e.g. "abcdef") */
+export function getGamesForLetters(letters: string): GameMeta[] {
+  if (!letters) return [];
+  const sorted = [...new Set(letters.toLowerCase().split(''))].sort();
+  return sorted
+    .map(l => ALL_GAMES.find(g => g.letter === l))
+    .filter((g): g is GameMeta => !!g);
+}
+
+/* ── Background image opacity per theme ────────────────────
+   Images must be in /public: camel.png, ld.png, winston.png
+   Adjust values to taste (0 = invisible, 1 = fully opaque)
+   ──────────────────────────────────────────────────────── */
+
+export const BG_IMAGE_OPACITY: Record<string, number> = {
+  camel:   0.1,
+  ld:      0.1,
+  winston: 0.1,
+  default: 0.1,
+};
+
 /** Number of prize slots to display per game (default for all games) */
 export const DEFAULT_DISPLAY_SLOTS = 5;
 

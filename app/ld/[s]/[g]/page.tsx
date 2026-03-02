@@ -1,19 +1,15 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect } from 'react';
-import HomePage from '../../../components/HomePage';
+import GameRouter from '../../../components/GameRouter';
 import { LD_THEME } from '../../../lib/themes';
 
-export default function LdEntryPage() {
+export default function LdGamePage() {
   const params = useParams();
+  const letters = (params.s as string) || '';
+  const game = (params.g as string) || '';
 
-  useEffect(() => {
-    const s = params.s as string;
-    const g = params.g as string;
-    if (s) sessionStorage.setItem('uid', s);
-    if (g) sessionStorage.setItem('gid', g);
-  }, [params]);
+  const theme = { ...LD_THEME, routePrefix: `${LD_THEME.routePrefix}/${letters}` };
 
-  return <HomePage theme={LD_THEME} />;
+  return <GameRouter game={game} theme={theme} />;
 }

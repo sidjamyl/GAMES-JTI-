@@ -9,6 +9,7 @@ import PrizeLegend from '../components/PrizeLegend';
 import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME, hexToRgb } from '../lib/themes';
 import { getDisplaySlots, distributeProportionally, shuffle } from '../lib/gameConfig';
+import GameBackground from '../components/GameBackground';
 
 /* ═══════════════════════════════════════════
    ANGRY BALL — Themeable
@@ -203,7 +204,7 @@ function generateLayout(allPrizes: Prize[], cupColors: string[]): {
 }
 
 export default function AngryBall({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode } = { ...DEFAULT_THEME, ...theme };
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, SIENNA, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode, name: themeName } = { ...DEFAULT_THEME, ...theme };
   const isLight = mode === 'light';
   const goldRgb = hexToRgb(GOLD);
   const CUP_COLORS = [GOLD, AMBER, SIENNA, GOLD_BRIGHT, '#b45309'];
@@ -995,6 +996,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
   return (
     <div style={wrapperStyle}>
         <div className="relative w-full h-full" style={{ background: BG_DARK }}>
+        <GameBackground themeName={themeName} />
         {/* Back to menu */}
         <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
@@ -1016,7 +1018,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
         {/* Ready screen */}
         {phase === 'ready' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-            <div className="absolute inset-0" style={{ background: isLight ? `linear-gradient(180deg, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` : `radial-gradient(ellipse at 30% 50%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }} />
+            <div className="absolute inset-0" style={{ background: isLight ? `linear-gradient(180deg, ${BG_LIGHT}dd 0%, ${BG_MID}dd 50%, ${BG_DARK}dd 100%)` : `radial-gradient(ellipse at 30% 50%, ${BG_LIGHT}dd 0%, ${BG_MID}dd 50%, ${BG_DARK}dd 100%)` }} />
             <div className="relative z-10 flex flex-col items-center gap-4 px-8">
               {/* Icon */}
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: GOLD + '15', animation: 'victoryFloat 3s ease-in-out infinite' }}>
@@ -1050,7 +1052,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
         )}
 
         {phase === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: BG_DARK }}>
+          <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: BG_DARK + 'dd' }}>
             <div className="w-8 h-8 border-2 rounded-full" style={{ borderColor: `${GOLD}30`, borderTopColor: GOLD, animation: 'spin 0.8s linear infinite' }} />
           </div>
         )}

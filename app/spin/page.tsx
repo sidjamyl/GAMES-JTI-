@@ -8,6 +8,7 @@ import VictoryScreen from '../components/VictoryScreen';
 import PrizeLegend from '../components/PrizeLegend';
 import Link from 'next/link';
 import { GameTheme, DEFAULT_THEME } from '../lib/themes';
+import GameBackground from '../components/GameBackground';
 
 /* ═══════════════════════════════════════════════
    SPIN & WIN — Wheel of Fortune  (v2)
@@ -28,14 +29,15 @@ const COLORS = [
 interface SliceInfo { prize: Prize; startDeg: number; endDeg: number; color: string; }
 
 export default function Spin({ theme }: { theme?: GameTheme }) {
-  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode } = theme ?? DEFAULT_THEME;
+  const _t = theme ?? DEFAULT_THEME;
+  const { GOLD, GOLD_BRIGHT, AMBER, CREAM, BG_DARK, BG_MID, BG_LIGHT, routePrefix, mode, name: themeName } = _t;
   const isLight = mode === 'light';
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const slicesRef = useRef<SliceInfo[]>([]);
-  const winnerRef = useRef<Prize | null>(null);
   const tickRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animRef   = useRef(false);
+  const arrowDegRef = useRef(0);   // tracks actual degree for landing calc
 
   const [prizes,   setPrizes]   = useState<Prize[]>([]);
   const [phase,    setPhase]    = useState<GamePhase>('loading');
@@ -172,8 +174,13 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
     setSpinning(false);
     animRef.current = false;
     setTimeout(() => {
+      /* Determine winner from actual arrow position */
+      const finalDeg = ((arrowDegRef.current % 360) + 360) % 360;
+      const landed = slicesRef.current.find(
+        s => finalDeg >= s.startDeg && finalDeg < s.endDeg,
+      ) || slicesRef.current[0];
       try { getSoundEngine().victory(); } catch {}
-      setWonPrize(winnerRef.current);
+      setWonPrize(landed.prize);
       setPhase('victory');
     }, 300);
   }, [clearTicks]);
@@ -185,13 +192,12 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
     setSpinning(true);
     animRef.current = true;
 
-    /* weighted random winner */
+    /* weighted random winner — used to choose target angle */
     const tot = prizes.reduce((s, p) => s + p.quantity, 0);
     let r = Math.random() * tot, w = prizes[prizes.length - 1];
     for (const p of prizes) { r -= p.quantity; if (r <= 0) { w = p; break; } }
-    winnerRef.current = w;
 
-    /* target angle */
+    /* target angle: arrow lands on winner's slice */
     const ws = slicesRef.current.find(s => s.prize.id === w.id)!;
     const mid = (ws.startDeg + ws.endDeg) / 2;
     const jitter = (Math.random() - 0.5) * (ws.endDeg - ws.startDeg) * 0.55;
@@ -199,7 +205,9 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
     const full = (MIN_SPINS + Math.random() * MAX_EXTRA) * 360;
     const mod = ((arrowDeg % 360) + 360) % 360;
     const extra = ((target - mod) % 360 + 360) % 360;
-    setArrowDeg(prev => prev + full + extra);
+    const newDeg = arrowDeg + full + extra;
+    arrowDegRef.current = newDeg;
+    setArrowDeg(newDeg);
 
     try { getSoundEngine().swoosh(); } catch {}
     startTicks();
@@ -215,6 +223,7 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
   return (
     <div className="relative w-full overflow-hidden flex flex-col items-center justify-center"
       style={{ height: '100dvh', background: `radial-gradient(ellipse at 50% 40%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}>
+      <GameBackground themeName={themeName} />
 
       {/* Back */}
       <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90"

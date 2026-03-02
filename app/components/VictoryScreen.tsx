@@ -24,15 +24,19 @@ export default function VictoryScreen({
 }: Props) {
   const [visible, setVisible] = useState(false);
   const [wlStatus, setWlStatus] = useState<string>('');
+  const [gained, setGained] = useState(false);
 
   useEffect(() => {
     getSoundEngine().victory();
     claimPrize(prize.id);
+    requestAnimationFrame(() => setVisible(true));
+  }, [prize.id]);
 
-    /* ── Notify WinDev/WebDev: WL.Execute("GAIN", idGift) ── */
+  /* ── Called when user clicks "Continuer" ── */
+  const handleContinue = () => {
+    if (gained) return;
+
     const idGift = isConsolation ? '-1' : String(prize.id);
-
-    // WL is injected by WinDev/WebDev into the HTML control's JS context
     const win = window as unknown as { WL?: { Execute?: (...args: string[]) => void } };
     if (win?.WL?.Execute) {
       win.WL.Execute('GAIN', idGift);
@@ -40,9 +44,8 @@ export default function VictoryScreen({
     } else {
       setWlStatus(`⚠️ WL.Execute non dispo (hors contexte WebDev)`);
     }
-
-    requestAnimationFrame(() => setVisible(true));
-  }, [prize.id, prize.name, isConsolation]);
+    setGained(true);
+  };
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center">
@@ -120,19 +123,19 @@ export default function VictoryScreen({
           </div>
 
           {/* CTA button */}
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="mt-3 w-full py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
-              style={{
-                background: accentFrom,
-                color: '#ffffff',
-                boxShadow: `0 4px 20px -4px ${accentFrom}50`,
-              }}
-            >
-              Continuer
-            </button>
-          )}
+          <button
+            onClick={handleContinue}
+            disabled={gained}
+            className="mt-3 w-full py-3.5 rounded-xl font-semibold text-[14px] tracking-wide transition-all duration-200 active:scale-[0.97]"
+            style={{
+              background: gained ? `${accentFrom}60` : accentFrom,
+              color: '#ffffff',
+              boxShadow: gained ? 'none' : `0 4px 20px -4px ${accentFrom}50`,
+              cursor: gained ? 'default' : 'pointer',
+            }}
+          >
+            {gained ? 'Terminé' : 'Continuer'}
+          </button>
 
           {/* Debug: WL.Execute status */}
           {wlStatus && (
