@@ -84,50 +84,44 @@ class SoundEngine {
     });
   }
 
-  /** Play an audio file silently — returns false if not available */
+  /** Play an audio file — returns false if not available */
   private _playFile(path: string, volume = 0.7, maxDuration = 5): Promise<boolean> {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') { resolve(false); return; }
+
+      let resolved = false;
+      const done = (ok: boolean) => { if (!resolved) { resolved = true; resolve(ok); } };
+
       const audio = new Audio(path);
       audio.volume = volume;
-      audio.preload = 'auto';
 
-      const cleanup = () => {
-        audio.pause();
-        audio.removeAttribute('src');
-        audio.load();
-      };
-
-      // Stop after maxDuration seconds
-      const timer = setTimeout(() => {
-        audio.pause();
-        audio.currentTime = 0;
-      }, maxDuration * 1000);
+      // Cut off after maxDuration
+      audio.addEventListener('timeupdate', () => {
+        if (audio.currentTime >= maxDuration) {
+          audio.pause();
+        }
+      });
 
       audio.addEventListener('canplaythrough', () => {
-        audio.play().then(() => resolve(true)).catch(() => { clearTimeout(timer); resolve(false); });
+        audio.play().then(() => done(true)).catch(() => done(false));
       }, { once: true });
 
-      audio.addEventListener('error', () => {
-        clearTimeout(timer);
-        cleanup();
-        resolve(false);
-      }, { once: true });
+      audio.addEventListener('error', () => done(false), { once: true });
 
-      // Safety timeout — if file doesn't load in 2s, use fallback
-      setTimeout(() => { cleanup(); clearTimeout(timer); resolve(false); }, 2000);
+      // If nothing happens after 3s, give up silently
+      setTimeout(() => done(false), 3000);
     });
   }
 
   /** Victory applause — plays /sounds/applause.mp3 (max 3s), fallback to chime */
   async victory() {
-    const ok = await this._playFile('/sounds/applause.mp3', 0.7, 3);
+    const ok = await this._playFile('/sounds/applause.mp3', 0.7, 5);
     if (!ok) this._victoryFallback();
   }
 
   /** Defeat sound — plays /sounds/defeat.mp3 (max 3s), fallback to sad tone */
   async defeat() {
-    const ok = await this._playFile('/sounds/defeat.mp3', 0.7, 3);
+    const ok = await this._playFile('/sounds/defeat.mp3', 0.7, 5);
     if (!ok) this._defeatFallback();
   }
 
