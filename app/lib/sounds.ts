@@ -2,6 +2,8 @@
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
+  private _cache: Record<string, string> = {}; // path → blob URL cache
+  private _preloading = false;
 
   private getCtx(): AudioContext {
     if (!this.ctx || this.ctx.state === 'closed') {
@@ -84,18 +86,38 @@ class SoundEngine {
     });
   }
 
-  /** Play an audio file — fetch first to avoid WebView errors, returns false if not available */
+  /** Preload audio files into blob URL cache */
+  preload() {
+    if (this._preloading || typeof window === 'undefined') return;
+    this._preloading = true;
+    ['/sounds/applause.mp3', '/sounds/defeat.mp3'].forEach(async (path) => {
+      try {
+        const res = await fetch(path);
+        if (res.ok) {
+          const blob = await res.blob();
+          this._cache[path] = URL.createObjectURL(blob);
+        }
+      } catch { /* ignore */ }
+    });
+  }
+
+  /** Play an audio file — uses cache if preloaded, returns false if not available */
   private async _playFile(path: string, volume = 0.7, maxDuration = 4): Promise<boolean> {
     if (typeof window === 'undefined') return false;
     try {
-      // Fetch the file as blob first — no visible error if 404
-      const res = await Promise.race([
-        fetch(path),
-        new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
-      ]);
-      if (!res.ok) return false;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      let url = this._cache[path];
+
+      // If not cached, fetch now
+      if (!url) {
+        const res = await Promise.race([
+          fetch(path),
+          new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+        ]);
+        if (!res.ok) return false;
+        const blob = await res.blob();
+        url = URL.createObjectURL(blob);
+        this._cache[path] = url;
+      }
 
       const audio = new Audio(url);
       audio.volume = volume;
@@ -104,10 +126,8 @@ class SoundEngine {
       audio.addEventListener('timeupdate', () => {
         if (audio.currentTime >= maxDuration) {
           audio.pause();
-          URL.revokeObjectURL(url);
         }
       });
-      audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
 
       await audio.play();
       return true;
