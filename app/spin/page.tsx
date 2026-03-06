@@ -225,12 +225,11 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
       style={{ height: '100dvh', background: `radial-gradient(ellipse at 50% 40%, ${BG_LIGHT} 0%, ${BG_MID} 50%, ${BG_DARK} 100%)` }}>
       <GameBackground themeName={themeName} />
 
-      {/* Back */}
-      <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90"
-        style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-          style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
-      </Link>
+      {phase === 'ready' && (
+        <Link href={routePrefix || '/'} className="absolute top-3 left-3 z-50 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 active:scale-90" style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}` }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)' }}><path d="M15 18l-6-6 6-6" /></svg>
+        </Link>
+      )}
       <PrizeLegend prizes={prizes} isLight={isLight} />
 
       {/* Header */}
@@ -242,7 +241,7 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
       )}
 
       {/* ── Wheel assembly ── */}
-      <div className="relative" style={{ width: 'min(82vw, 62vh, 380px)', aspectRatio: '1' }}>
+      <div className="relative" style={{ width: 'min(92vw, 78vh, 500px)', aspectRatio: '1' }}>
 
         {/* Static canvas wheel */}
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full rounded-full" />

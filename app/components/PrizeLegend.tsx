@@ -17,28 +17,28 @@ export default function PrizeLegend({ prizes, isLight = false }: Props) {
     <div
       className="absolute top-3 right-3 z-50 rounded-2xl overflow-hidden backdrop-blur-xl"
       style={{
-        background: isLight ? 'rgba(255,255,255,0.82)' : 'rgba(20,18,28,0.82)',
-        border: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'}`,
+        background: isLight ? 'rgba(255,255,255,0.85)' : 'rgba(20,18,28,0.85)',
+        border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.10)'}`,
         boxShadow: isLight
-          ? '0 4px 20px -6px rgba(0,0,0,0.10)'
-          : '0 4px 20px -6px rgba(0,0,0,0.4)',
-        maxHeight: '55vh',
+          ? '0 6px 28px -6px rgba(0,0,0,0.12)'
+          : '0 6px 28px -6px rgba(0,0,0,0.5)',
+        maxHeight: '60vh',
         overflowY: 'auto',
       }}
     >
-      <div className="px-2 py-1.5 flex flex-col gap-0.5">
+      <div className="px-3 py-2.5 flex flex-col gap-1">
         {unique.map((p) => (
           <div
             key={p.id}
-            className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg"
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl"
             style={{
-              background: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)',
+              background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)',
             }}
           >
-            <span className="text-sm leading-none flex-shrink-0">{p.emoji}</span>
+            <span className="text-2xl leading-none flex-shrink-0">{p.emoji}</span>
             <span
-              className="text-[10px] font-medium leading-tight truncate max-w-[100px]"
-              style={{ color: isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)' }}
+              className="text-[15px] font-semibold leading-tight truncate max-w-[160px]"
+              style={{ color: isLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)' }}
             >
               {p.name}
             </span>

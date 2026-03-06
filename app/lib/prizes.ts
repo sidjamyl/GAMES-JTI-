@@ -24,81 +24,11 @@ declare global {
   }
 }
 
-/* ── Debug panel overlay — shows step-by-step log on screen ── */
-function getDebugPanel(): HTMLDivElement {
-  if (typeof document === 'undefined') return null as unknown as HTMLDivElement;
-  let panel = document.getElementById('wl-debug-panel') as HTMLDivElement | null;
-  if (!panel) {
-    // Backdrop overlay
-    const backdrop = document.createElement('div');
-    backdrop.id = 'wl-debug-backdrop';
-    Object.assign(backdrop.style, {
-      position: 'fixed', inset: '0', zIndex: '99998',
-      background: 'rgba(0,0,0,0.5)',
-      backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
-    });
-    document.body.appendChild(backdrop);
-
-    // Dialog container
-    const dialog = document.createElement('div');
-    dialog.id = 'wl-debug-dialog';
-    Object.assign(dialog.style, {
-      position: 'fixed', top: '50%', left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: '90vw', maxWidth: '500px', maxHeight: '70vh',
-      zIndex: '99999', borderRadius: '16px', overflow: 'hidden',
-      background: '#1a1a2e', color: '#fff',
-      fontFamily: 'monospace', fontSize: '11px',
-      boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-      display: 'flex', flexDirection: 'column',
-    });
-    document.body.appendChild(dialog);
-
-    // Header
-    const header = document.createElement('div');
-    Object.assign(header.style, {
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '12px 16px', background: '#f59e0b', color: '#000',
-      fontWeight: 'bold', fontSize: '13px',
-    });
-    header.innerHTML = '🛠 Debug WL';
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕ Fermer';
-    Object.assign(closeBtn.style, {
-      background: 'rgba(0,0,0,0.2)', border: 'none', color: '#000',
-      padding: '6px 14px', borderRadius: '8px', cursor: 'pointer',
-      fontWeight: 'bold', fontSize: '12px',
-    });
-    closeBtn.onclick = () => {
-      dialog.style.display = 'none';
-      backdrop.style.display = 'none';
-    };
-    header.appendChild(closeBtn);
-    dialog.appendChild(header);
-
-    // Log area
-    panel = document.createElement('div');
-    panel.id = 'wl-debug-panel';
-    Object.assign(panel.style, {
-      flex: '1', overflowY: 'auto',
-      padding: '10px 14px', lineHeight: '1.7',
-    });
-    dialog.appendChild(panel);
-  }
-  return panel;
-}
-
+/* ── Debug log — console only, no on-screen overlay ── */
 function debugLog(message: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') {
-  if (typeof document === 'undefined') return;
+  if (typeof window === 'undefined') return;
   const icons = { info: '🔵', success: '✅', error: '❌', warn: '⚠️' };
-  const colors = { info: '#93c5fd', success: '#86efac', error: '#fca5a5', warn: '#fde68a' };
-  const panel = getDebugPanel();
-  const line = document.createElement('div');
-  const time = new Date().toLocaleTimeString();
-  line.innerHTML = `<span style="color:#666">[${time}]</span> ${icons[type]} <span style="color:${colors[type]}">${message}</span>`;
-  panel.appendChild(line);
-  panel.scrollTop = panel.scrollHeight;
-  // console.log(`[WL-DEBUG] ${message}`);
+  console.log(`[WL-DEBUG] ${icons[type]} ${message}`);
 }
 
 /* ── Mock data for testing outside WebDev ── */
