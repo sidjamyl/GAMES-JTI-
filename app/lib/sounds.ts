@@ -84,22 +84,63 @@ class SoundEngine {
     });
   }
 
-  /** Triumphant victory fanfare */
+  /** Victory applause — plays /sounds/applause.mp3 if available, fallback to simple fanfare */
   victory() {
+    if (typeof window !== 'undefined') {
+      const audio = new Audio('/sounds/applause.mp3');
+      audio.volume = 0.7;
+      audio.play().catch(() => this._victoryFallback());
+      return;
+    }
+    this._victoryFallback();
+  }
+
+  /** Defeat sound — plays /sounds/defeat.mp3 if available, fallback to synthesized tone */
+  defeat() {
+    if (typeof window !== 'undefined') {
+      const audio = new Audio('/sounds/defeat.mp3');
+      audio.volume = 0.7;
+      audio.play().catch(() => this._defeatFallback());
+      return;
+    }
+    this._defeatFallback();
+  }
+
+  /** Fallback defeat sound (descending sad tone) */
+  private _defeatFallback() {
     const ctx = this.getCtx();
-    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    const notes = [440, 370, 311, 261];
     notes.forEach((freq, i) => {
-      const t = i * 0.12;
+      const t = i * 0.15;
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.connect(g).connect(ctx.destination);
       o.type = 'sine';
       o.frequency.value = freq;
       g.gain.setValueAtTime(0, ctx.currentTime + t);
-      g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + t + 0.04);
+      g.gain.linearRampToValueAtTime(0.18, ctx.currentTime + t + 0.03);
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.5);
       o.start(ctx.currentTime + t);
       o.stop(ctx.currentTime + t + 0.5);
+    });
+  }
+
+  /** Fallback victory sound (synthesized chime) */
+  private _victoryFallback() {
+    const ctx = this.getCtx();
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      const t = i * 0.1;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g).connect(ctx.destination);
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0, ctx.currentTime + t);
+      g.gain.linearRampToValueAtTime(0.22, ctx.currentTime + t + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.4);
+      o.start(ctx.currentTime + t);
+      o.stop(ctx.currentTime + t + 0.4);
     });
   }
 

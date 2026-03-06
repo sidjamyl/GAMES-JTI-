@@ -27,10 +27,14 @@ export default function VictoryScreen({
   const [gained, setGained] = useState(false);
 
   useEffect(() => {
-    getSoundEngine().victory();
+    if (isConsolation) {
+      getSoundEngine().defeat();
+    } else {
+      getSoundEngine().victory();
+    }
     claimPrize(prize.id);
     requestAnimationFrame(() => setVisible(true));
-  }, [prize.id]);
+  }, [prize.id, isConsolation]);
 
   /* ── Called when user clicks "Continuer" ── */
   const handleContinue = () => {

@@ -54,7 +54,7 @@ export const DEFAULT_DISPLAY_SLOTS = 5;
 
 /** Per-game overrides (optional — falls back to DEFAULT_DISPLAY_SLOTS) */
 export const GAME_DISPLAY_SLOTS: Record<string, number> = {
-  plinko: 10,
+  plinko: 14,
   cannon: 6,
   pendulum: 6,
   'angry-ball': 6,
