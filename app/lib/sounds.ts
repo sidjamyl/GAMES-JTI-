@@ -85,7 +85,7 @@ class SoundEngine {
   }
 
   /** Play an audio file silently — returns false if not available */
-  private _playFile(path: string, volume = 0.7, maxDuration = 4): Promise<boolean> {
+  private _playFile(path: string, volume = 0.7, maxDuration = 5): Promise<boolean> {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') { resolve(false); return; }
       const audio = new Audio(path);
