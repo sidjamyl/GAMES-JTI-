@@ -102,7 +102,7 @@ class SoundEngine {
   }
 
   /** Play an audio file — uses cache if preloaded, returns false if not available */
-  private async _playFile(path: string, volume = 0.7, maxDuration = 4): Promise<boolean> {
+  private async _playFile(path: string, volume = 0.7, maxDuration = 3): Promise<boolean> {
     if (typeof window === 'undefined') return false;
     try {
       let url = this._cache[path];
@@ -138,13 +138,13 @@ class SoundEngine {
 
   /** Victory applause — plays /sounds/applause.mp3 (max 3s), fallback to chime */
   async victory() {
-    const ok = await this._playFile('/sounds/applause.mp3', 0.7, 4);
+    const ok = await this._playFile('/sounds/applause.mp3', 0.7, 3);
     if (!ok) this._victoryFallback();
   }
 
   /** Defeat sound — plays /sounds/defeat.mp3 (max 3s), fallback to sad tone */
   async defeat() {
-    const ok = await this._playFile('/sounds/defeat.mp3', 0.7, 4);
+    const ok = await this._playFile('/sounds/defeat.mp3', 0.7, 3);
     if (!ok) this._defeatFallback();
   }
 
