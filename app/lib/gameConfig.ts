@@ -28,6 +28,11 @@ export const ALL_GAMES: GameMeta[] = [
   { slug: 'whac-a-mole',  title: 'Whac-a-Mole',  desc: 'Tapez les taupes',     letter: '' },
 ];
 
+/** Get the letter for a given game slug (e.g. 'spin' → 'a') */
+export function getLetterForSlug(slug: string): string {
+  return ALL_GAMES.find(g => g.slug === slug)?.letter ?? '';
+}
+
 /** Get ordered list of games for a letters string (e.g. "abcdef") */
 export function getGamesForLetters(letters: string): GameMeta[] {
   if (!letters) return [];

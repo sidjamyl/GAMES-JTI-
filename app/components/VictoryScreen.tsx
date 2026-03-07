@@ -13,6 +13,8 @@ interface Props {
   accentTo?: string;
   /** When true, shows a "you lost but here's a consolation" message instead of "you won" */
   isConsolation?: boolean;
+  /** Game letter (e.g. 'a' for spin) appended to the prize id in the GAIN call */
+  gameLetter?: string;
 }
 
 export default function VictoryScreen({
@@ -21,6 +23,7 @@ export default function VictoryScreen({
   accentFrom = '#C19A6B',
   accentTo = '#8E7045',
   isConsolation = false,
+  gameLetter = '',
 }: Props) {
   const [visible, setVisible] = useState(false);
   const [wlStatus, setWlStatus] = useState<string>('');
@@ -40,7 +43,8 @@ export default function VictoryScreen({
   const handleContinue = () => {
     if (gained) return;
 
-    const idGift = isConsolation ? '-1' : String(prize.id);
+    const rawId = isConsolation ? '-1' : String(prize.id);
+    const idGift = gameLetter ? `${rawId};${gameLetter}` : rawId;
     const win = window as unknown as { WL?: { Execute?: (...args: string[]) => void } };
     if (win?.WL?.Execute) {
       win.WL.Execute('GAIN', idGift);

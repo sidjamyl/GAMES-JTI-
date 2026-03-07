@@ -699,6 +699,7 @@ export default function Plinko({ theme }: { theme?: GameTheme }) {
           accentFrom={GOLD}
           accentTo={AMBER}
           isConsolation={gameOver}
+          gameLetter="b"
         />
       )}
     </div>

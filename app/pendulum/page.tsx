@@ -692,7 +692,7 @@ export default function Pendulum({ theme }: { theme?: GameTheme }) {
         </div>
       )}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} gameLetter="e" />
       )}
       {missed && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-30" style={{ background: isLight ? 'rgba(0,0,0,0.55)' : 'rgba(10,8,18,0.85)' }}>

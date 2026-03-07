@@ -840,7 +840,7 @@ export default function GyroMaze({ theme }: { theme?: GameTheme }) {
 
       {/* Victory */}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} gameLetter="" />
       )}
     </div>
   );

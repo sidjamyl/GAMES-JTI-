@@ -218,7 +218,7 @@ export default function Spin({ theme }: { theme?: GameTheme }) {
 
   /* ── Render ────────────────────────────────── */
   if (phase === 'victory' && wonPrize)
-    return <VictoryScreen prize={wonPrize} onClose={() => window.location.reload()} accentFrom={GOLD} accentTo={AMBER} />;
+    return <VictoryScreen prize={wonPrize} onClose={() => window.location.reload()} accentFrom={GOLD} accentTo={AMBER} gameLetter="a" />;
 
   return (
     <div className="relative w-full overflow-hidden flex flex-col items-center justify-center"

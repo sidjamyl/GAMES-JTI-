@@ -405,7 +405,7 @@ export default function StackTower({ theme }: { theme?: GameTheme }) {
         </div>
       )}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} gameLetter="" />
       )}
     </div>
   );

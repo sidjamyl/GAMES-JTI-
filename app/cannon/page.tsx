@@ -769,7 +769,7 @@ export default function CannonTrajectory({ theme }: { theme?: GameTheme }) {
         </div>
       )}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} isConsolation={gameOver} gameLetter="c" />
       )}
     </div>
   );

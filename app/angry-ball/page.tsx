@@ -1066,6 +1066,7 @@ export default function AngryBall({ theme }: { theme?: GameTheme }) {
             accentFrom={GOLD}
             accentTo={AMBER}
             isConsolation={gameOver}
+            gameLetter="d"
           />
         )}
       </div>

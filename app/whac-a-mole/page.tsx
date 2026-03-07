@@ -290,7 +290,7 @@ export default function GiftCatcher({ theme }: { theme?: GameTheme }) {
 
       {/* Victory */}
       {phase === 'victory' && wonPrize && (
-        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} />
+        <VictoryScreen prize={wonPrize} onClose={() => setPhase('ready')} accentFrom={GOLD} accentTo={AMBER} gameLetter="" />
       )}
 
       <style jsx>{`
